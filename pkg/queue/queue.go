@@ -44,10 +44,15 @@ type Job struct {
 	// filled after dispatch
 	RemoteHandle string // native id at the target (k8s object, flux jobid, ...)
 	Note         string // last human-readable status/error
+	Artifact     string `json:",omitempty"` // last generated native artifact (for repair + audit)
 
 	// set when an infeasible job was given a reconciliation suggestion
 	Suggestion    string           `json:",omitempty"` // rationale for a proposed reconfiguration
 	SuggestedSpec *jobspec.Jobspec `json:",omitempty"` // a jobspec that WOULD fit
+
+	// Reschedules counts wrong-target hand-backs to scheduling (cancel+free+
+	// re-select). Bounded so a job can't bounce between clusters forever.
+	Reschedules int `json:",omitempty"`
 
 	UpdatedAt time.Time
 }

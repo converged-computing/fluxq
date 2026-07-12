@@ -52,6 +52,18 @@ type Manager struct {
 	// river dispatcher (NewRiverEngine) enqueues durable, retried dispatch jobs.
 	Dispatcher Dispatcher
 
+	// pipeline seams (nil => the real implementation); overridden in tests to
+	// drive each transition edge deterministically.
+	attempt  func(queue.Job) attemptResult
+	repairFn func(j queue.Job, lastErr string) attemptResult
+	statusFn func(graph.ClusterGraph, string) (queue.State, string, error)
+	cancelFn func(graph.ClusterGraph, string) error
+	validate func(graph.ClusterGraph, cluster.Content) (verdict, string)
+
+	// riverInsert is set by NewRiverEngine* so stage workers can enqueue the
+	// next stage. nil on the inline/memory path.
+	riverInsert riverInserter
+
 	mu  sync.Mutex
 	seq int
 }
@@ -169,7 +181,22 @@ func (m *Manager) Run(stop <-chan struct{}) {
 // without the ticker.
 func (m *Manager) Step() {
 	m.scheduleOnce()
-	m.monitorOnce()
+	// The staged river pipeline runs its own monitor stage; running the inline
+	// monitor too would double-free allocations and race the stage. Skip it
+	// when the dispatcher owns monitoring. The inline/memory path (no such
+	// dispatcher) monitors here as before.
+	if !m.dispatcherOwnsMonitoring() {
+		m.monitorOnce()
+	}
+}
+
+// pipelineOwner is implemented by dispatchers that run their own monitor stage
+// (the staged river pipeline), so the manager knows to skip inline monitoring.
+type pipelineOwner interface{ ownsMonitoring() bool }
+
+func (m *Manager) dispatcherOwnsMonitoring() bool {
+	po, ok := m.Dispatcher.(pipelineOwner)
+	return ok && po.ownsMonitoring()
 }
 
 // scheduleOnce runs one pass: order the queue (policy), then for each job

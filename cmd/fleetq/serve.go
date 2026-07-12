@@ -29,6 +29,8 @@ func runServe(args []string) error {
 	dsn := fs.String("dsn", "", "DB DSN (sqlite file/':memory:' or postgres URL); default per backend / $DATABASE_URL")
 	addr := fs.String("addr", ":8080", "HTTP listen address")
 	fleetDir := fs.String("fleet", "", "optional JGF directory to preload clusters from")
+	transformKind := fs.String("transform", "stub", "artifact transform: stub (deterministic templates) | agent (Claude via $ANTHROPIC_API_KEY)")
+	dev := fs.Bool("dev", false, "dev/demo mode: dispatch every registered cluster through the emulator (no real backend, token, or cluster needed)")
 	_ = fs.Parse(args)
 
 	logger := log.New(os.Stdout, "", log.Ltime)
@@ -48,7 +50,12 @@ func runServe(args []string) error {
 		real = append(real, fd)
 	}
 	realDrivers := cluster.NewRegistry(real...)
-	logger.Println("dispatch: emulated by default; register a cluster with --config (flux: uri=local|ssh://…) to dispatch for real")
+	if *dev {
+		realDrivers = nil
+		logger.Println("dispatch: DEV MODE — all clusters run through the emulator (no real backends)")
+	} else {
+		logger.Println("dispatch: emulated by default; register a cluster with --config (flux: uri=local|ssh://…) to dispatch for real")
+	}
 
 	// Backend selection (see README): memory (default), sqlite, postgres.
 	var (
@@ -105,7 +112,7 @@ func runServe(args []string) error {
 		Queue:       q,
 		Matcher:     newMatcher(logger, graph.NewFleet()),
 		Policy:      policy.Backfill{Depth: 1},
-		Trans:       transform.Stub{},
+		Trans:       chooseTransform(*transformKind, logger),
 		Drivers:     drivers,
 		RealDrivers: realDrivers,
 		Tick:        300 * time.Millisecond,
@@ -157,4 +164,21 @@ func runServe(args []string) error {
 	defer cancel()
 	_ = srv.Shutdown(ctxSh)
 	return nil
+}
+
+// chooseTransform selects the artifact transformer. "agent" uses Claude (token
+// from $ANTHROPIC_API_KEY) and enables the repair stage; "stub" is the
+// deterministic default that needs no token.
+func chooseTransform(kind string, logger *log.Logger) transform.Transformer {
+	if kind == "agent" {
+		a := transform.NewAgentTransformer()
+		if a.APIKey == "" {
+			logger.Println("WARNING: --transform agent but $ANTHROPIC_API_KEY is empty; generations will error")
+		} else {
+			logger.Printf("transform: Claude agent (model %s)", a.Model)
+		}
+		return a
+	}
+	logger.Println("transform: deterministic stub")
+	return transform.Stub{}
 }
