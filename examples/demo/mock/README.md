@@ -1,29 +1,5 @@
 # fleetq demo
 
-A self-contained walkthrough of the whole pipeline — **text jobspec → match →
-dispatch → monitor → complete** — across a heterogeneous fleet, with **no real
-cluster, no Kubernetes, and no token required**. It runs entirely in-process
-against fleetq's emulator, so you can see the moving parts before wiring real
-backends.
-
-Every command and output below was run as-is; a turnkey script is in
-[`demo.sh`](./demo.sh).
-
-## What the demo shows
-
-- Registering clusters of different managers (`flux-operator`, `slurm-operator`,
-  `k8s-job`) and attaching their capacity (`containment`) and capabilities
-  (`software`) as subsystems.
-- Feasibility (`satisfy`) vs. actual placement + dispatch.
-- A job flowing to completion through the emulator.
-- The same run on the **durable SQLite** backend, which uses the staged river
-  pipeline (dispatch → monitor stages with retry).
-- Optionally, the **Claude agent** transform, if you have a token.
-
-`--dev` is the key: it routes every registered cluster through the emulator, so
-dispatch completes without a live backend. Drop it to use real drivers
-(Kubernetes via client-go; Flux with `-tags fluxcore`).
-
 ## 0. Build
 
 ```bash

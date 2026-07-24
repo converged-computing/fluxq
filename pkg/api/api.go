@@ -160,6 +160,9 @@ type ClusterInfo struct {
 	Handle     string   `json:"handle,omitempty"`
 	Nodes      int      `json:"nodes"`
 	Subsystems []string `json:"subsystems,omitempty"`
+	// Capability property keys on the cluster (software + network, e.g. lammps,
+	// efa) — what a selector matches a container against. Matched by requires.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 func infoOf(cg graph.ClusterGraph) ClusterInfo {
@@ -172,7 +175,12 @@ func infoOf(cg graph.ClusterGraph) ClusterInfo {
 	if g := cg.Containment(); g != nil {
 		nodes = len(g.VerticesOfTypeExported("node"))
 	}
-	return ClusterInfo{Name: cg.ID, Manager: string(cg.Manager), Handle: cg.Handle, Nodes: nodes, Subsystems: subs}
+	var caps []string
+	for k := range cg.Capabilities() {
+		caps = append(caps, k)
+	}
+	sort.Strings(caps)
+	return ClusterInfo{Name: cg.ID, Manager: string(cg.Manager), Handle: cg.Handle, Nodes: nodes, Subsystems: subs, Capabilities: caps}
 }
 
 // ManagerInfo reports a manager type and whether this server can dispatch to it

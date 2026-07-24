@@ -49,6 +49,38 @@ func (j Jobspec) ToFluxSpec() (string, error) {
 // subsystem's graph. The section is slot-wrapped so it is a valid jobspec; its
 // resource types are matched by type in the subsystem graph (e.g. a "software"
 // section requesting type "lammps" WITH "kokkos").
+// AnyOfType marks a requires entry whose `with` children are ALTERNATIVES (OR):
+// the entry is satisfied if ANY one child is. Everything else stays AND. Because
+// each subsystem is satisfied by its own independent graph query, OR needs no
+// Fluxion grammar support — we expand a section into its concrete alternatives
+// and satisfy if any one of them satisfies.
+const AnyOfType = "anyof"
+
+// ExpandSection turns a requires section (possibly containing `anyof` groups)
+// into the list of concrete AND-sections it denotes. The section is satisfied
+// iff ANY returned concrete section is. With no `anyof`, the section is returned
+// unchanged as the single alternative (so existing behavior is unaffected).
+func ExpandSection(section []Resource) [][]Resource {
+	alts := [][]Resource{{}}
+	for _, r := range section {
+		var next [][]Resource
+		if r.Type == AnyOfType {
+			for _, base := range alts {
+				for _, choice := range r.With {
+					row := append(append([]Resource{}, base...), choice)
+					next = append(next, row)
+				}
+			}
+		} else {
+			for _, base := range alts {
+				next = append(next, append(append([]Resource{}, base...), r))
+			}
+		}
+		alts = next
+	}
+	return alts
+}
+
 func SubsystemFluxSpec(section []Resource) (string, error) {
 	if len(section) == 0 {
 		return "", fmt.Errorf("empty subsystem section")
