@@ -174,12 +174,20 @@ func (m *SimMatcher) subsystemSatisfies(cg graph.ClusterGraph, sub string, secti
 	if g == nil {
 		return false
 	}
-	for _, r := range section {
-		if !satisfyResource(g, r) {
-			return false
+	// OR across the section's concrete alternatives (anyof); AND within each.
+	for _, concrete := range jobspec.ExpandSection(section) {
+		all := true
+		for _, r := range concrete {
+			if !satisfyResource(g, r) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 func (m *SimMatcher) fittingNodes(cg graph.ClusterGraph, js jobspec.Jobspec, onlyFree bool) []string {

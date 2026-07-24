@@ -312,6 +312,18 @@ make fluxion-bench  # real Fluxion match benchmarks
 make run            # serve with real Fluxion selection
 ```
 
+### Jobspecs
+
+```bash
+pip install -e ./client/py[aws] --break-system-packages
+```
+
+Run
+
+```bash
+fleetq-select --manifests-dir manifests --clusters clusters.json --goal "run LAMMPS REAX efficiently, CPU to minimize costs." --out-dir jobspecs --model us.anthropic.claude-sonnet-5
+```
+
 ### To test flux-core
 
 ```bash

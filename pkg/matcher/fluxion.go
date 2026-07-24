@@ -293,8 +293,13 @@ func (m *FluxionMatcher) Evaluate(js jobspec.Jobspec) []Candidate {
 		for sub := range js.Requires {
 			ok := false
 			if ctx := cc.subsystems[sub]; ctx != nil {
-				if ss, err := jobspec.SubsystemFluxSpec(js.Requires[sub]); err == nil {
-					ok = ctx.w.satisfy(ss)
+				// OR across concrete alternatives (anyof): satisfy if any renders
+				// and matches against this subsystem's graph.
+				for _, concrete := range jobspec.ExpandSection(js.Requires[sub]) {
+					if ss, err := jobspec.SubsystemFluxSpec(concrete); err == nil && ctx.w.satisfy(ss) {
+						ok = true
+						break
+					}
 				}
 			}
 			if ok {

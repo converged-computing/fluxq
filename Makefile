@@ -62,10 +62,10 @@ fluxion-bench:   ## real Fluxion match benchmarks (inside .devcontainer); compar
 
 db-up:           ## initialize + start a local Postgres and create the fleetq db/role
 	@PGBIN=$$(ls -d /usr/lib/postgresql/*/bin | head -1); \
-	[ -d /var/lib/pgdata/base ] || (mkdir -p /var/lib/pgdata && chown postgres:postgres /var/lib/pgdata && su postgres -c "$$PGBIN/initdb -D /var/lib/pgdata"); \
-	su postgres -c "$$PGBIN/pg_ctl -D /var/lib/pgdata -l /tmp/pglog start" || true; sleep 2; \
-	su postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='fleetq'\" | grep -q 1 || psql -c \"CREATE ROLE fleetq LOGIN SUPERUSER PASSWORD 'fleetq'\""; \
-	su postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='fleetq'\" | grep -q 1 || psql -c \"CREATE DATABASE fleetq OWNER fleetq\""
+	[ -d /var/lib/pgdata/base ] || (sudo mkdir -p /var/lib/pgdata && sudo chown postgres:postgres /var/lib/pgdata && sudo -u postgres "$$PGBIN/initdb" -D /var/lib/pgdata); \
+	sudo -u postgres "$$PGBIN/pg_ctl" -D /var/lib/pgdata -l /tmp/pglog start || true; sleep 2; \
+	sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='fleetq'" | grep -q 1 || sudo -u postgres psql -c "CREATE ROLE fleetq LOGIN SUPERUSER PASSWORD 'fleetq'"; \
+	sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='fleetq'" | grep -q 1 || sudo -u postgres psql -c "CREATE DATABASE fleetq OWNER fleetq"
 
 kind-up:          ## create a local kind cluster (context: kind-fleetq) for k8s dispatch
 	kind create cluster --config .devcontainer/kind-config.yaml
@@ -74,7 +74,7 @@ kind-down:        ## delete the local kind cluster
 	kind delete cluster --name fleetq
 
 db-down:         ## stop the local Postgres
-	@PGBIN=$$(ls -d /usr/lib/postgresql/*/bin | head -1); su postgres -c "$$PGBIN/pg_ctl -D /var/lib/pgdata stop" || true
+	@PGBIN=$$(ls -d /usr/lib/postgresql/*/bin | head -1); sudo -u postgres "$$PGBIN/pg_ctl" -D /var/lib/pgdata stop || true
 
 clean:
 	rm -rf bin
