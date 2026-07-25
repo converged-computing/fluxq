@@ -40,6 +40,14 @@ type Driver interface {
 	Logs(target graph.ClusterGraph, handle string) (string, error)
 }
 
+// Discoverer is an OPTIONAL driver capability: introspect a cluster's nodes into
+// backend-neutral NodeFacts. A backend that can't introspect simply does not
+// implement it — discovery is dispatched by type-assertion, never by manager
+// name, so adding Flux/Slurm discovery later is just implementing this interface.
+type Discoverer interface {
+	Discover(target graph.ClusterGraph) ([]NodeFacts, error)
+}
+
 // Registry resolves a driver by manager type.
 type Registry struct {
 	drivers map[graph.ManagerType]Driver

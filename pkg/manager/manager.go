@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -315,6 +316,42 @@ func (m *Manager) anyFeasible(js jobspec.Jobspec) bool {
 
 // RegisterSubsystem attaches a named subsystem tree to an existing cluster in
 // both the fleet and the matcher. descriptive=true means satisfy-only.
+// DiscoverCluster asks the cluster's own driver to introspect its nodes (if the
+// driver supports it), then registers the resulting descriptive subsystems the
+// same way manual registration does. Dispatch is by capability, not by manager
+// name — a backend gets discovery by implementing cluster.Discoverer.
+func (m *Manager) DiscoverCluster(clusterID string) ([]string, error) {
+	cg, ok := m.Fleet.Get(clusterID)
+	if !ok {
+		return nil, fmt.Errorf("cluster %q not registered", clusterID)
+	}
+	drv, err := m.driverFor(cg)
+	if err != nil {
+		return nil, err
+	}
+	dsc, ok := drv.(cluster.Discoverer)
+	if !ok {
+		return nil, fmt.Errorf("manager %q does not support discovery", cg.Manager)
+	}
+	facts, err := dsc.Discover(cg)
+	if err != nil {
+		return nil, err
+	}
+	subs, _, err := cluster.SubsystemsFromFacts(facts)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for name, g := range subs {
+		if err := m.RegisterSubsystem(clusterID, name, g, true); err != nil {
+			return names, err
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 func (m *Manager) RegisterSubsystem(clusterID, name string, g *graph.JGF, descriptive bool) error {
 	cg, ok := m.Fleet.Get(clusterID)
 	if !ok {
