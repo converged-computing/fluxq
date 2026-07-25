@@ -22,6 +22,7 @@ import (
 	"github.com/converged-computing/fluxq/pkg/jobspec"
 	"github.com/converged-computing/fluxq/pkg/manager"
 	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/vocabulary"
 )
 
 // JobAuthenticator gates submit/assess. Default: allow all.
@@ -61,6 +62,7 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /v1/managers", s.managers)
 	mux.HandleFunc("GET /v1/clusters/{name}", s.cluster)
 	// subsystems (POST/DELETE on the typed subresource = add/remove)
+	mux.HandleFunc("GET /v1/vocabulary", s.vocabulary)
 	mux.HandleFunc("POST /v1/clusters/{name}/subsystems/{sub}", s.registerSubsystem)
 	mux.HandleFunc("DELETE /v1/clusters/{name}/subsystems/{sub}", s.unregisterSubsystem)
 	// jobs
@@ -416,4 +418,11 @@ func dash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// vocabulary derives the agent's allowed label set from the registered fleet:
+// arch/network values present, gpu vendor only if heterogeneous, memory as
+// contiguous quantile ranges over node sizes. Read-only.
+func (s *Server) vocabulary(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, vocabulary.Derive(s.M.Clusters()))
 }
