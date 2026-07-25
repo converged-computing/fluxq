@@ -51,5 +51,5 @@ jobs:
           docker run --rm -v "$PWD":/src -w /src "$FLUX_IMAGE" bash -lc '
             export PATH=$PATH:/usr/local/go/bin GOFLAGS=-buildvcs=false
             make all
-            test -x bin/fleetq
+            test -x bin/fluxq
           '

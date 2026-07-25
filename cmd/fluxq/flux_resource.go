@@ -1,14 +1,14 @@
 package main
 
-// `fleetq cluster subsystem from-flux` derives a containment subsystem from the
+// `fluxq cluster subsystem from-flux` derives a containment subsystem from the
 // flux instance the command is run inside (the RV1 resource set from
 // `flux resource R`) and attaches it to a registered cluster. This is how you
-// point fleetq at a real local flux broker instead of a hand-authored JGF:
+// point fluxq at a real local flux broker instead of a hand-authored JGF:
 //
 //	flux start                         # (in the devcontainer)
-//	fleetq cluster register --name local --manager flux-uri
-//	export FLEETQ_SECRET=<printed>
-//	fleetq cluster subsystem from-flux --cluster local
+//	fluxq cluster register --name local --manager flux-uri
+//	export FLUXQ_SECRET=<printed>
+//	fluxq cluster subsystem from-flux --cluster local
 //
 // RV1 is the authoritative resource description (what Fluxion itself consumes),
 // so we read it rather than scraping `flux resource list` text.
@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/graph"
 )
 
 // rv1 is the subset of the RFC 20 (R version 1) resource set we need.
@@ -141,7 +141,7 @@ func subsystemFromFlux(args []string) error {
 		return nil
 	}
 	if *cluster == "" {
-		return fmt.Errorf("usage: fleetq cluster subsystem from-flux --cluster C [--caps a,b] [--print] --secret S")
+		return fmt.Errorf("usage: fluxq cluster subsystem from-flux --cluster C [--caps a,b] [--print] --secret S")
 	}
 	body := map[string]any{"descriptive": false, "graph": json.RawMessage(raw)}
 	out, _, err := httpDoAuth("POST", *server+"/v1/clusters/"+*cluster+"/subsystems/containment", *secret, body)

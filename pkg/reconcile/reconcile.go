@@ -14,8 +14,8 @@ package reconcile
 import (
 	"fmt"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 // NodeShape is a group of identical nodes on a cluster.

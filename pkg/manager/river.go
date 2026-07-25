@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/queue"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -40,8 +40,8 @@ const (
 
 const repairMaxAttempts = 3
 
-// Each stage carries just the fleetq job id (the durable record is in
-// fleetq_jobs; handlers reload it). Repair also carries the error to fix.
+// Each stage carries just the fluxq job id (the durable record is in
+// fluxq_jobs; handlers reload it). Repair also carries the error to fix.
 type dispatchArgs struct {
 	JobID string `json:"job_id"`
 }
@@ -53,9 +53,9 @@ type monitorArgs struct {
 	JobID string `json:"job_id"`
 }
 
-func (dispatchArgs) Kind() string { return "fleetq_dispatch" }
-func (repairArgs) Kind() string   { return "fleetq_repair" }
-func (monitorArgs) Kind() string  { return "fleetq_monitor" }
+func (dispatchArgs) Kind() string { return "fluxq_dispatch" }
+func (repairArgs) Kind() string   { return "fluxq_repair" }
+func (monitorArgs) Kind() string  { return "fluxq_monitor" }
 
 type dispatchWorker struct {
 	river.WorkerDefaults[dispatchArgs]

@@ -1,15 +1,15 @@
-# fleetq demo
+# fluxq demo
 
 ## 0. Build
 
 ```bash
-go build -o fleetq ./cmd/fleetq
+go build -o fluxq ./cmd/fluxq
 ```
 
 ## 1. Start the server (in-memory, dev dispatch)
 
 ```bash
-./fleetq serve --dev --addr :8080
+./fluxq serve --dev --addr :8080
 ```
 
 Leave it running; use a second terminal for the rest. All client commands take
@@ -21,10 +21,10 @@ Registering a cluster returns a **secret** that gates edits to that cluster.
 The CLI prints an `export` line — copy it.
 
 ```bash
-./fleetq cluster register --name alpha --manager flux-operator
+./fluxq cluster register --name alpha --manager flux-operator
 ```
 ```bash
-export FLEETQ_SECRET=<paste from above>
+export FLUXQ_SECRET=<paste from above>
 ```
 
 Attach the two subsystems from the bundled quickstart graphs. `containment` is
@@ -32,8 +32,8 @@ Attach the two subsystems from the bundled quickstart graphs. `containment` is
 **descriptive** (satisfy-only capability, `--descriptive=true`):
 
 ```bash
-./fleetq cluster subsystem register --cluster alpha --name containment --descriptive=false --file data/quickstart/alpha.containment.json
-./fleetq cluster subsystem register --cluster alpha --name software --descriptive=true  --file data/quickstart/alpha.software.json
+./fluxq cluster subsystem register --cluster alpha --name containment --descriptive=false --file data/quickstart/alpha.containment.json
+./fluxq cluster subsystem register --cluster alpha --name software --descriptive=true  --file data/quickstart/alpha.software.json
 ```
 
 ## 3. See what can run where (no allocation)
@@ -42,19 +42,19 @@ Attach the two subsystems from the bundled quickstart graphs. `containment` is
 capacity, allocating nothing:
 
 ```bash
-./fleetq satisfy --file examples/job-lammps.json
+./fluxq satisfy --file examples/job-lammps.json
 ```
 
 ## 4. Submit and watch it complete
 
 ```bash
-./fleetq submit --file examples/job-lammps.json
+./fluxq submit --file examples/job-lammps.json
 ```
 
 After a couple of seconds:
 
 ```bash
-./fleetq jobs
+./fluxq jobs
 ```
 
 ```
@@ -77,14 +77,14 @@ Inspect one job's full record (the "receipt spine" — spec, placement, native
 handle, last note):
 
 ```bash
-./fleetq job job-0001
+./fluxq job job-0001
 ```
 
 ## 5. Introspection
 
 ```bash
-./fleetq managers    # which managers can dispatch for real vs. emulated
-./fleetq jobs        # the "flux jobs" view
+./fluxq managers    # which managers can dispatch for real vs. emulated
+./fluxq jobs        # the "flux jobs" view
 ```
 
 ## 6. The durable backend (staged river pipeline)
@@ -94,17 +94,17 @@ Swap the in-memory queue for SQLite. Dispatch and monitoring then run as
 that backs Postgres in production, on a single local file, no server:
 
 ```bash
-./fleetq serve --dev --queue sqlite --dsn "file:demo.sqlite3?_txlock=immediate" --addr :8080
+./fluxq serve --dev --queue sqlite --dsn "file:demo.sqlite3?_txlock=immediate" --addr :8080
 ```
 
 Register a cluster and submit exactly as before (e.g. `gamma` is `k8s-job` and
 advertises `gromacs`):
 
 ```bash
-./fleetq cluster register --name gamma --manager k8s-job
-./fleetq cluster subsystem register --cluster gamma --name containment --descriptive=false --file data/quickstart/gamma.containment.json
-./fleetq cluster subsystem register --cluster gamma --name software --descriptive=true  --file data/quickstart/gamma.software.json
-./fleetq submit --file examples/job-gromacs.json
+./fluxq cluster register --name gamma --manager k8s-job
+./fluxq cluster subsystem register --cluster gamma --name containment --descriptive=false --file data/quickstart/gamma.containment.json
+./fluxq cluster subsystem register --cluster gamma --name software --descriptive=true  --file data/quickstart/gamma.software.json
+./fluxq submit --file examples/job-gromacs.json
 ```
 
 The job state is durable: `demo.sqlite3` persists the queue and the river stages,
@@ -119,7 +119,7 @@ jobspec and the chosen cluster:
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 export ANTHROPIC_MODEL=claude-sonnet-4-5
-./fleetq serve --dev --transform agent --addr :8080
+./fluxq serve --dev --transform agent --addr :8080
 ```
 
 ```

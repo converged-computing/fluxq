@@ -1,4 +1,4 @@
-"""SelectorTask: choose the best container per application and author a fleetq
+"""SelectorTask: choose the best container per application and author a fluxq
 jobspec, keeping the available clusters in mind. Reads manifests (raw facts) +
 the cluster snapshot; the agent picks a container; the harness stamps the image
 from the chosen manifest and derives `requires` deterministically from its
@@ -17,7 +17,7 @@ from .jobspec import SelectedJob, build_jobspec
 from .requires import KNOWN_NETWORKS, is_gpu, network_section, unknown_networks
 
 SELECT = """You choose the best container for each application and turn it into a
-fleetq jobspec, keeping the available clusters in mind. You choose a CONTAINER,
+fluxq jobspec, keeping the available clusters in mind. You choose a CONTAINER,
 not a cluster (a scheduler places it later).
 
 Use list_applications, get_variants (raw facts per candidate container), and

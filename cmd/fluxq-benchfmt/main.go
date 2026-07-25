@@ -1,10 +1,10 @@
-// Command fleetq-benchfmt turns `go test -bench` output into a human-readable
+// Command fluxq-benchfmt turns `go test -bench` output into a human-readable
 // comparison table. It reads benchmark lines from stdin (or a file arg), groups
 // them by matcher (Fluxion vs Simulated) and fleet size, and prints one table
 // per fleet size with clearly-named metrics as rows and a side-by-side column
 // for each matcher plus a comparison.
 //
-//	go test -tags fluxion -run x -bench . -benchmem ./pkg/matcher/ | go run ./cmd/fleetq-benchfmt
+//	go test -tags fluxion -run x -bench . -benchmem ./pkg/matcher/ | go run ./cmd/fluxq-benchfmt
 package main
 
 import (

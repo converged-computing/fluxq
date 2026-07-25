@@ -5,7 +5,7 @@
 // ones behind it (FCFS) or lets them backfill ahead (Backfill).
 package policy
 
-import "github.com/converged-computing/fleetq/pkg/queue"
+import "github.com/converged-computing/fluxq/pkg/queue"
 
 // Policy orders the provisional queue and says whether the head blocks.
 type Policy interface {

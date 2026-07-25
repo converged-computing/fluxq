@@ -18,8 +18,8 @@
 package matcher
 
 import (
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 // Allocation is a successful countable-subsystem match: the selected cluster

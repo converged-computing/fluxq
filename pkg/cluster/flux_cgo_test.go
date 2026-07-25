@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // These run against the ambient broker; invoke under `flux start`.

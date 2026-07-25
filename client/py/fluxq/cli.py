@@ -1,4 +1,4 @@
-"""fleetq — Python client. A subcommand dispatcher; `select` authors jobspecs by
+"""fluxq — Python client. A subcommand dispatcher; `select` authors jobspecs by
 choosing the best container per application. Structured so more subcommands
 (submit, clusters, ...) slot in as the client grows.
 """
@@ -41,7 +41,7 @@ def resolve_backend(explicit: str | None) -> str:
         return explicit
     found = available_backends()
     if not found:
-        raise SystemExit("no agent backend installed — pip install fleetq-client[aws] "
+        raise SystemExit("no agent backend installed — pip install fluxq-client[aws] "
                          "(or [claude] / [gemini])")
     return found[0]
 
@@ -53,7 +53,7 @@ def _add_select(sub) -> None:
     s.add_argument("--model", default=None, help="model name for the chosen backend")
     s.add_argument("--manifest", help="saved run manifest JSON (skips the conversation)")
     s.add_argument("--manifests-dir", default="manifests", help="root of the manifest tree")
-    s.add_argument("--clusters", help="clusters JSON file OR a fleetq base URL (GET /v1/clusters)")
+    s.add_argument("--clusters", help="clusters JSON file OR a fluxq base URL (GET /v1/clusters)")
     s.add_argument("--goal", default="Choose the best container per application.")
     s.add_argument("--out-dir", default="jobspecs", help="where to write the jobspec tree")
     s.add_argument("--duration", type=int, default=3600, help="default job duration (seconds)")
@@ -73,7 +73,7 @@ def cmd_select(args) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="fleetq", description="fleetq Python client")
+    p = argparse.ArgumentParser(prog="fluxq", description="fluxq Python client")
     sub = p.add_subparsers(dest="cmd", required=True)
     _add_select(sub)
     return p
@@ -85,7 +85,7 @@ def main(argv=None) -> None:
 
 
 def select_entry(argv=None) -> None:
-    """Console-script entry `fleetq-select` — the select subcommand directly."""
+    """Console-script entry `fluxq-select` — the select subcommand directly."""
     main(["select", *(sys.argv[1:] if argv is None else argv)])
 
 

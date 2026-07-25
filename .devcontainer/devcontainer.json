@@ -1,5 +1,5 @@
 {
-  "name": "fleetq (real Fluxion + river/Postgres)",
+  "name": "fluxq (real Fluxion + river/Postgres)",
   "dockerFile": "Dockerfile",
   "context": "..",
   "customizations": { "vscode": { "extensions": ["golang.go"] } },

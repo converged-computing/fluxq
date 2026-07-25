@@ -19,18 +19,18 @@ type SQLite struct {
 }
 
 const sqliteSchema = `
-CREATE TABLE IF NOT EXISTS fleetq_jobs (
+CREATE TABLE IF NOT EXISTS fluxq_jobs (
     id           TEXT PRIMARY KEY,
     state        TEXT NOT NULL,
     submitted_at TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
     data         TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS fleetq_jobs_state_idx ON fleetq_jobs (state, submitted_at);
+CREATE INDEX IF NOT EXISTS fluxq_jobs_state_idx ON fluxq_jobs (state, submitted_at);
 `
 
 // NewSQLiteDB opens a pure-Go SQLite database. Use a file DSN like
-// "file:fleetq.sqlite3?_txlock=immediate" for durability, or ":memory:" for an
+// "file:fluxq.sqlite3?_txlock=immediate" for durability, or ":memory:" for an
 // ephemeral store. A single open connection avoids SQLITE_BUSY (river's
 // recommendation) and keeps :memory: coherent across goroutines.
 func NewSQLiteDB(dsn string) (*sql.DB, error) {
@@ -46,7 +46,7 @@ func NewSQLiteDB(dsn string) (*sql.DB, error) {
 // river (same database), so one handle drives both.
 func NewSQLite(ctx context.Context, db *sql.DB) (*SQLite, error) {
 	if _, err := db.ExecContext(ctx, sqliteSchema); err != nil {
-		return nil, fmt.Errorf("create fleetq schema: %w", err)
+		return nil, fmt.Errorf("create fluxq schema: %w", err)
 	}
 	return &SQLite{db: db}, nil
 }
@@ -61,7 +61,7 @@ func (s *SQLite) upsert(j Job) error {
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = s.db.Exec(`
-        INSERT INTO fleetq_jobs (id, state, submitted_at, updated_at, data)
+        INSERT INTO fluxq_jobs (id, state, submitted_at, updated_at, data)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE
           SET state = excluded.state, updated_at = excluded.updated_at, data = excluded.data`,
@@ -74,7 +74,7 @@ func (s *SQLite) Update(j Job) error  { return s.upsert(j) }
 
 func (s *SQLite) Get(id string) (Job, bool) {
 	var data string
-	err := s.db.QueryRow(`SELECT data FROM fleetq_jobs WHERE id = ?`, id).Scan(&data)
+	err := s.db.QueryRow(`SELECT data FROM fluxq_jobs WHERE id = ?`, id).Scan(&data)
 	if err != nil {
 		return Job{}, false
 	}
@@ -86,7 +86,7 @@ func (s *SQLite) Get(id string) (Job, bool) {
 }
 
 func (s *SQLite) query(where string, args ...any) []Job {
-	rows, err := s.db.Query(`SELECT data FROM fleetq_jobs `+where+` ORDER BY submitted_at`, args...)
+	rows, err := s.db.Query(`SELECT data FROM fluxq_jobs `+where+` ORDER BY submitted_at`, args...)
 	if err != nil {
 		return nil
 	}

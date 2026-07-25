@@ -1,11 +1,11 @@
-# fleetq
+# fluxq
 
 > a fleet-level queue manager for descriptive dispatch
 
-![docs/img/fleetq.png](docs/img/fleetq.png)
+![docs/img/fluxq.png](docs/img/fluxq.png)
 
 A prototype of the `text prompt → select → transform → dispatch → monitor`
-pipeline, built with Fluxion. `fleetq` is the fleet-level analog of Flux's
+pipeline, built with Fluxion. `fluxq` is the fleet-level analog of Flux's
 `qmanager`: it allows for registration and query against **fleet resource graphs** 
 (whole clusters as vertices) to pick a target cluster. After candidate scoring
 and selection, each jobspec is transformed and dispatched.
@@ -37,16 +37,16 @@ So `lammps` is on alpha+beta (but with **different** dependency subtrees),
 # Terminal 1 — build with the REAL Fluxion matcher. Run this inside the
 # .devcontainer, where flux-sched and LD_LIBRARY_PATH are already set (see §7).
 make fluxion
-./bin/fleetq serve
+./bin/fluxq serve
 ```
 
 And now in a second terminal, let's register a new cluster.
 
 ```bash
 # Register alpha (empty). Prints a secret — save it for edits.
-# ./bin/fleetq cluster register --name alpha --manager flux-operator
-./bin/fleetq cluster register --name alpha --manager flux-operator --config emulate=true
-export FLEETQ_SECRET=<the printed secret>
+# ./bin/fluxq cluster register --name alpha --manager flux-operator
+./bin/fluxq cluster register --name alpha --manager flux-operator --config emulate=true
+export FLUXQ_SECRET=<the printed secret>
 ```
 
 Now let's define subsystems. Descriptive subsystems are for things that aren't technically countable.
@@ -55,19 +55,19 @@ We just need to know it is there.
 
 ```bash
 # Attach containment (countable) and software (descriptive) — both JGF files.
-./bin/fleetq cluster subsystem register --cluster alpha --name containment --descriptive=false --file data/quickstart/alpha.containment.json
-./bin/fleetq cluster subsystem register --cluster alpha --name software --descriptive=true  --file data/quickstart/alpha.software.json
+./bin/fluxq cluster subsystem register --cluster alpha --name containment --descriptive=false --file data/quickstart/alpha.containment.json
+./bin/fluxq cluster subsystem register --cluster alpha --name software --descriptive=true  --file data/quickstart/alpha.software.json
 ```
 
 Now view the list - we have a cluster! Note that it is emulated.
 
 ```bash
-./bin/fleetq cluster list
+./bin/fluxq cluster list
 
 # Ask which clusters could run lammps-WITH-kokkos — ranked, allocates NOTHING:
-./bin/fleetq satisfy --file examples/job-lammps-kokkos.json
-./bin/fleetq submit --file examples/job-lammps-kokkos.json
-./bin/fleetq jobs
+./bin/fluxq satisfy --file examples/job-lammps-kokkos.json
+./bin/fluxq submit --file examples/job-lammps-kokkos.json
+./bin/fluxq jobs
 ```
 
 Now view the list — we have a cluster. The DISPATCH column shows `emulated`: an
@@ -77,7 +77,7 @@ can unregister it:
 
 ```bash
 # Done experimenting with selection? Unregister it and register a real target:
-./bin/fleetq cluster unregister --name alpha
+./bin/fluxq cluster unregister --name alpha
 ```
 
 ### Dispatching to a real flux instance
@@ -91,19 +91,19 @@ this server runs inside; a remote instance is `ssh://host/run/flux/local`. Omit
 ```bash
 flux start
 # --config uri=local opts this cluster into REAL dispatch (the ambient broker)
-./bin/fleetq cluster register --name local --manager flux-uri --config uri=$FLUX_URI
-export FLEETQ_SECRET=<printed>
+./bin/fluxq cluster register --name local --manager flux-uri --config uri=$FLUX_URI
+export FLUXQ_SECRET=<printed>
 
 # Derive the containment subsystem straight from the running instance (RV1):
-./bin/fleetq cluster subsystem from-flux --cluster local --print
-./bin/fleetq cluster subsystem from-flux --cluster local
+./bin/fluxq cluster subsystem from-flux --cluster local --print
+./bin/fluxq cluster subsystem from-flux --cluster local
 
 # Submit — this actually runs `flux submit` on your broker:
-./bin/fleetq satisfy --file examples/job-hostname.json
-./bin/fleetq submit --file examples/job-hostname.json
-./bin/fleetq jobs
-./bin/fleetq log job-0002
-./bin/fleetq cluster unregister --name local
+./bin/fluxq satisfy --file examples/job-hostname.json
+./bin/fluxq submit --file examples/job-hostname.json
+./bin/fluxq jobs
+./bin/fluxq log job-0002
+./bin/fluxq cluster unregister --name local
 ```
 
 ### Dispatching to Kubernetes (a local kind cluster)
@@ -117,20 +117,20 @@ image (`attributes.user.image`).
 # You likely need to run this outside of the dev container
 make kind-up
 
-./bin/fleetq cluster register --name k8s --manager k8s-job --config context=kind-fleetq
-export FLEETQ_SECRET=<printed>
+./bin/fluxq cluster register --name k8s --manager k8s-job --config context=kind-fluxq
+export FLUXQ_SECRET=<printed>
 
 # Get the kubeconfig from your local machine and write to /home/vscode/.kube/config
 mkdir -p /home/vscode/.kube
 # From outside
-kind get kubeconfig --name fleetq --internal > kubeconfig-internal.yaml
+kind get kubeconfig --name fluxq --internal > kubeconfig-internal.yaml
 mv ./kubeconfig-internal.yaml ~/.kube/config
 
 # attach containment describing the cluster's nodes (a JGF; see data/quickstart)
-./bin/fleetq cluster subsystem register --cluster k8s --name containment --descriptive=false --file data/quickstart/alpha.containment.json
+./bin/fluxq cluster subsystem register --cluster k8s --name containment --descriptive=false --file data/quickstart/alpha.containment.json
 
-./bin/fleetq submit --file examples/job-k8s.json   # kubectl apply a batch/v1 Job
-./bin/fleetq jobs                                   # HANDLE is job.batch/<name>
+./bin/fluxq submit --file examples/job-k8s.json   # kubectl apply a batch/v1 Job
+./bin/fluxq jobs                                   # HANDLE is job.batch/<name>
 make kind-down
 ```
 
@@ -149,23 +149,23 @@ flux start
 make kind-up
 
 # 2. flux cluster: containment from the live instance + lammps/kokkos software
-./bin/fleetq cluster register --name hpc --manager flux-uri --config uri=$FLUX_URI
+./bin/fluxq cluster register --name hpc --manager flux-uri --config uri=$FLUX_URI
 export HPC=<printed secret>
-FLEETQ_SECRET=$HPC ./bin/fleetq cluster subsystem from-flux --cluster hpc
-FLEETQ_SECRET=$HPC ./bin/fleetq cluster subsystem register --cluster hpc --name software --descriptive=true --file data/demo/flux.software.json
+FLUXQ_SECRET=$HPC ./bin/fluxq cluster subsystem from-flux --cluster hpc
+FLUXQ_SECRET=$HPC ./bin/fluxq cluster subsystem register --cluster hpc --name software --descriptive=true --file data/demo/flux.software.json
 
 # 3. kind cluster: containment (sample JGF stand-in) + gromacs software
-./bin/fleetq cluster register --name k8s --manager k8s-job --config context=kind-fleetq
+./bin/fluxq cluster register --name k8s --manager k8s-job --config context=kind-fluxq
 export K8S=<printed secret>
-FLEETQ_SECRET=$K8S ./bin/fleetq cluster subsystem register --cluster k8s --name containment --descriptive=false --file data/quickstart/alpha.containment.json
-FLEETQ_SECRET=$K8S ./bin/fleetq cluster subsystem register --cluster k8s --name software --descriptive=true --file data/demo/k8s.software.json
+FLUXQ_SECRET=$K8S ./bin/fluxq cluster subsystem register --cluster k8s --name containment --descriptive=false --file data/quickstart/alpha.containment.json
+FLUXQ_SECRET=$K8S ./bin/fluxq cluster subsystem register --cluster k8s --name software --descriptive=true --file data/demo/k8s.software.json
 
 # 4. predict the routing, then dispatch — lammps only fits hpc, gromacs only k8s
-./bin/fleetq satisfy --file examples/job-lammps.json     # CLUSTER: hpc  (MATCHED software)
-./bin/fleetq satisfy --file examples/job-gromacs.json    # CLUSTER: k8s  (MATCHED software)
-./bin/fleetq submit  --file examples/job-lammps.json
-./bin/fleetq submit  --file examples/job-gromacs.json
-./bin/fleetq jobs
+./bin/fluxq satisfy --file examples/job-lammps.json     # CLUSTER: hpc  (MATCHED software)
+./bin/fluxq satisfy --file examples/job-gromacs.json    # CLUSTER: k8s  (MATCHED software)
+./bin/fluxq submit  --file examples/job-lammps.json
+./bin/fluxq submit  --file examples/job-gromacs.json
+./bin/fluxq jobs
 # JOBID     NAME         STATE      CLUSTER  HANDLE
 # job-0001  lammps-job   COMPLETED  hpc      ƒsqnNWs                 <- real flux jobid
 # job-0002  gromacs-job  COMPLETED  k8s      job.batch/gromacs-job   <- kubectl-applied Job
@@ -204,13 +204,13 @@ I still like the design :)
 The top-level resources, tasks, and attributes are the **containment** request,
 matched as-is (it is already a valid Flux jobspec. Each `requires.<subsystem>` 
 is another section, in the *same* Flux resource vocabulary, that we use for
-fleetq to query subsystems. This allows us to fully define a job's requirements
+fluxq to query subsystems. This allows us to fully define a job's requirements
 across subsystems in one jobspec. Preloading is also JGF: `serve --fleet <dir>` 
 loads a directory of JGF clusters. And storage backends:
 
 ```bash
-./bin/fleetq serve --queue sqlite        # durable queue, local file, no server
-./bin/fleetq serve --queue postgres      # durable queue for production
+./bin/fluxq serve --queue sqlite        # durable queue, local file, no server
+./bin/fluxq serve --queue postgres      # durable queue for production
 make fluxion                             # build with the REAL Fluxion matcher (see §7)
 ```
 
@@ -259,7 +259,7 @@ out of it.
 
 Follow the numbers against the commands in §1.
 
-1. **Submit.** `fleetq submit` (or `POST /v1/jobs/submit`) puts a job in the queue in
+1. **Submit.** `fluxq submit` (or `POST /v1/jobs/submit`) puts a job in the queue in
    the `SUBMITTED` (provisional) state. 
 
 2. **Schedule pass (policy).** Every tick the manager pulls provisional jobs in
@@ -291,7 +291,7 @@ Follow the numbers against the commands in §1.
 
 7. **Monitor & free.** A monitor loop polls `driver.Status` for active jobs.
    On a terminal state (completed/failed/timeout) it releases the allocation
-   (`matcher.Free`) so those nodes are available again. `fleetq jobs` shows the
+   (`matcher.Free`) so those nodes are available again. `fluxq jobs` shows the
    whole queue at any moment.
 
 
@@ -321,7 +321,7 @@ pip install -e ./client/py[aws] --break-system-packages
 Run
 
 ```bash
-fleetq-select --manifests-dir manifests --clusters clusters.json --goal "run LAMMPS REAX efficiently, CPU to minimize costs." --out-dir jobspecs --model us.anthropic.claude-sonnet-5
+fluxq-select --manifests-dir manifests --clusters clusters.json --goal "run LAMMPS REAX efficiently, CPU to minimize costs." --out-dir jobspecs --model us.anthropic.claude-sonnet-5
 ```
 
 ### To test flux-core
@@ -329,18 +329,18 @@ fleetq-select --manifests-dir manifests --clusters clusters.json --goal "run LAM
 ```bash
 make fluxcore
 flux start bash -c '
-  ./bin/fleetq serve &
+  ./bin/fluxq serve &
   sleep 1
 
-  ./bin/fleetq managers        # flux-uri -> REAL DISPATCH: yes  (proves libflux is linked)
+  ./bin/fluxq managers        # flux-uri -> REAL DISPATCH: yes  (proves libflux is linked)
 
-  SECRET=$(./bin/fleetq cluster register --name hpc --manager flux-uri --config uri=local | sed -n "s/^secret: //p")
-  export FLEETQ_SECRET=$SECRET
-  ./bin/fleetq cluster subsystem from-flux --cluster hpc
+  SECRET=$(./bin/fluxq cluster register --name hpc --manager flux-uri --config uri=local | sed -n "s/^secret: //p")
+  export FLUXQ_SECRET=$SECRET
+  ./bin/fluxq cluster subsystem from-flux --cluster hpc
 
-  ./bin/fleetq submit --file examples/job-hostname.json
+  ./bin/fluxq submit --file examples/job-hostname.json
   sleep 2
-  ./bin/fleetq jobs            # HANDLE is a real ƒ jobid; STATE COMPLETED; NOTE "finished (exit 0)"
+  ./bin/fluxq jobs            # HANDLE is a real ƒ jobid; STATE COMPLETED; NOTE "finished (exit 0)"
 '
 ```
 
@@ -357,8 +357,8 @@ flux start bash -c '
 
 These are issues I am logging as I work with reapi:
 
- - [InitContext](https://github.com/flux-framework/flux-sched/issues/1525) cannot extend beyond one process due to string interner. fleetq works around it by running one reapi context per worker subprocess.
- - The traverser requires a containment subsystem, so every subsystem graph fleetq loads carries a containment backbone (its resource types are the subsystem's, but the structural subsystem is `containment`).
+ - [InitContext](https://github.com/flux-framework/flux-sched/issues/1525) cannot extend beyond one process due to string interner. fluxq works around it by running one reapi context per worker subprocess.
+ - The traverser requires a containment subsystem, so every subsystem graph fluxq loads carries a containment backbone (its resource types are the subsystem's, but the structural subsystem is `containment`).
 
 ## License
 

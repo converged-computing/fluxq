@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 // SimMatcher traverses the loaded JGF trees the way Fluxion would, without the

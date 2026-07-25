@@ -3,7 +3,7 @@
 // the exact document `flux run`/Fluxion consume. The only addition is an
 // optional `requires` block — a map of subsystem name -> Flux resource subtree —
 // carrying the extra sections we split out to query auxiliary subsystem graphs
-// (software, network, …). Vanilla Flux ignores `requires`; fleetq uses it.
+// (software, network, …). Vanilla Flux ignores `requires`; fluxq uses it.
 //
 // The top-level `resources` is the CONTAINMENT section (the countable request).
 // Each `requires[sub]` is another section, in the same resource vocabulary,

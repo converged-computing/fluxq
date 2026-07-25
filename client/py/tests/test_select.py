@@ -5,10 +5,10 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
-from fleetq.io import load_manifests
-from fleetq.jobspec import save_jobspecs
-from fleetq.requires import is_gpu, network_section, unknown_networks
-from fleetq.select import SelectorTask
+from fluxq.io import load_manifests
+from fluxq.jobspec import save_jobspecs
+from fluxq.requires import is_gpu, network_section, unknown_networks
+from fluxq.select import SelectorTask
 
 
 def _manifest(root, ref, app, needed):
@@ -80,4 +80,4 @@ def test_libfabric_container_requires_a_fabric_not_the_app():
 if __name__ == "__main__":
     test_network_section_and_validation()
     test_libfabric_container_requires_a_fabric_not_the_app()
-    print("\nall fleetq-select tests passed")
+    print("\nall fluxq-select tests passed")

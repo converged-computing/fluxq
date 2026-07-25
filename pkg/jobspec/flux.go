@@ -6,7 +6,7 @@ import (
 )
 
 // ToFluxSpec renders the CONTAINMENT request as a Flux v1 jobspec in the shape
-// real reapi requires to ALLOCATE against a fleetq containment graph
+// real reapi requires to ALLOCATE against a fluxq containment graph
 // (cluster→rack→node→socket→core): node→slot→socket→core. MatchSatisfy is
 // lenient about intermediate levels, but MatchAllocate is strict and needs the
 // socket level present, so we derive this canonical shape from the jobspec's

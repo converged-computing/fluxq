@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/manager"
-	"github.com/converged-computing/fleetq/pkg/matcher"
-	"github.com/converged-computing/fleetq/pkg/policy"
-	"github.com/converged-computing/fleetq/pkg/queue"
-	"github.com/converged-computing/fleetq/pkg/transform"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/manager"
+	"github.com/converged-computing/fluxq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/policy"
+	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/transform"
 )
 
 // TestStagedPipelineOverSQLite runs a job end-to-end through the durable river
@@ -22,7 +22,7 @@ import (
 // the real transport works — not just the transport-agnostic handlers.
 func TestStagedPipelineOverSQLite(t *testing.T) {
 	ctx := context.Background()
-	dsn := "file:" + filepath.Join(t.TempDir(), "fleetq.sqlite3") + "?_txlock=immediate"
+	dsn := "file:" + filepath.Join(t.TempDir(), "fluxq.sqlite3") + "?_txlock=immediate"
 
 	db, err := queue.NewSQLiteDB(dsn)
 	if err != nil {

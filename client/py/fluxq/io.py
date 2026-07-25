@@ -38,12 +38,12 @@ def load_manifests(manifests_dir: str) -> dict[str, list[dict]]:
 
 
 def load_clusters(source: Any) -> list[dict]:
-    """A path to JSON, a fleetq base URL (GET /v1/clusters), a raw list, or
+    """A path to JSON, a fluxq base URL (GET /v1/clusters), a raw list, or
     {'clusters': [...]}. Includes each cluster's `capabilities` (needs the
     infoOf capabilities field)."""
     if isinstance(source, str) and source.startswith(("http://", "https://")):
         url = source.rstrip("/") + "/v1/clusters"
-        with urllib.request.urlopen(url) as r:  # nosec - operator-provided fleetq URL
+        with urllib.request.urlopen(url) as r:  # nosec - operator-provided fluxq URL
             source = json.loads(r.read().decode())
     elif isinstance(source, str):
         source = read_json(source)

@@ -1,11 +1,11 @@
-# A small local Kubernetes cluster for fleetq dispatch testing.
+# A small local Kubernetes cluster for fluxq dispatch testing.
 #   kind create cluster --config .devcontainer/kind-config.yaml
-# creates the cluster and a kubeconfig context named `kind-fleetq`. Register a
-# fleetq cluster against it with:
-#   fleetq cluster register --name k8s --manager k8s-job --config context=kind-fleetq
+# creates the cluster and a kubeconfig context named `kind-fluxq`. Register a
+# fluxq cluster against it with:
+#   fluxq cluster register --name k8s --manager k8s-job --config context=kind-fluxq
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: fleetq
+name: fluxq
 nodes:
   - role: control-plane
   - role: worker

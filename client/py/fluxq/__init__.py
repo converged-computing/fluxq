@@ -1,6 +1,6 @@
-"""fleetq — Python client for fleetq (ships in the fleetq repo, versioned with it).
+"""fluxq — Python client for fluxq (ships in the fluxq repo, versioned with it).
 
-Subcommands via `python -m fleetq <cmd>` or dedicated entrypoints. Today: `select`
+Subcommands via `python -m fluxq <cmd>` or dedicated entrypoints. Today: `select`
 (author jobspecs by choosing the best container per application, clusters in mind).
 """
 

@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/matcher"
-	"github.com/converged-computing/fleetq/pkg/policy"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/policy"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // exportSmall writes a two-cluster JGF fleet and loads it back through the

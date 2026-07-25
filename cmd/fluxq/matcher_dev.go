@@ -5,8 +5,8 @@ package main
 import (
 	"log"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/matcher"
 )
 
 // newMatcher (default build) returns the OFFLINE DEV DOUBLE. It is not Fluxion.

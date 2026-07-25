@@ -3,9 +3,9 @@ package cluster_test
 import (
 	"testing"
 
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 func submitStatus(t *testing.T, m graph.ManagerType, c cluster.Content) (queue.State, string) {

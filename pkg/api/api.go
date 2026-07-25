@@ -18,10 +18,10 @@ import (
 	"sync"
 	"text/tabwriter"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/manager"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/manager"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // JobAuthenticator gates submit/assess. Default: allow all.

@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/converged-computing/fleetq/pkg/matcher"
+import "github.com/converged-computing/fluxq/pkg/matcher"
 
 // maybeFluxionWorker turns this process into a reapi worker when invoked with the
 // worker sentinel arg (used by the FluxionMatcher supervisor to isolate each
