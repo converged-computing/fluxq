@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Self-contained fleetq demo using the REAL Fluxion scheduler (flux-sched reapi)
+# Self-contained fluxq demo using the REAL Fluxion scheduler (flux-sched reapi)
 # for matching, with emulated dispatch (--dev) so no real cluster/token is
 # needed. Requires the flux-sched libraries (the repo .devcontainer provides
 # them at /opt/flux-sched). Run from the repo root: examples/demo/demo.sh
@@ -10,9 +10,9 @@ ADDR=":8080"
 SERVER="http://localhost:8080"
 QUEUE="${QUEUE:-memory}"       # QUEUE=sqlite for the durable staged pipeline
 TRANSFORM="${TRANSFORM:-stub}" # TRANSFORM=agent + $ANTHROPIC_API_KEY for the agent
-BIN=./bin/fleetq
+BIN=./bin/fluxq
 
-echo ">> building fleetq with Fluxion (make fluxion)"
+echo ">> building fluxq with Fluxion (make fluxion)"
 make fluxion FLUX_SCHED_ROOT="$FLUX_SCHED_ROOT"
 
 # reapi shared libs must be on the loader path at runtime (worker subprocesses)
@@ -23,17 +23,17 @@ if [ "$QUEUE" = "sqlite" ]; then
   ARGS+=(--queue sqlite --dsn "file:demo.sqlite3?_txlock=immediate")
 fi
 
-echo ">> starting server: fleetq ${ARGS[*]}"
-"$BIN" "${ARGS[@]}" >/tmp/fleetq-demo.log 2>&1 &
+echo ">> starting server: fluxq ${ARGS[*]}"
+"$BIN" "${ARGS[@]}" >/tmp/fluxq-demo.log 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT
 sleep 2
-grep -i "matcher:" /tmp/fleetq-demo.log || true
+grep -i "matcher:" /tmp/fluxq-demo.log || true
 
 echo ">> registering cluster alpha (flux-operator)"
 REG=$("$BIN" cluster register --name alpha --manager flux-operator --server "$SERVER")
 echo "$REG"
-export FLEETQ_SECRET=$(echo "$REG" | awk -F= '/export FLEETQ_SECRET=/{print $2}')
+export FLUXQ_SECRET=$(echo "$REG" | awk -F= '/export FLUXQ_SECRET=/{print $2}')
 
 echo ">> attaching containment (countable) + software (descriptive)"
 "$BIN" cluster subsystem register --cluster alpha --name containment \
@@ -56,4 +56,4 @@ done
 
 echo ">> final state"
 "$BIN" jobs --server "$SERVER"
-echo ">> done (server log: /tmp/fleetq-demo.log)"
+echo ">> done (server log: /tmp/fluxq-demo.log)"

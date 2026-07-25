@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // The emulator lets the whole pipeline be exercised with no real clusters. A

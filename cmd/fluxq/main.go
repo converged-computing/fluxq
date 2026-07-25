@@ -1,16 +1,16 @@
-// Command fleetq is both the server and its client.
+// Command fluxq is both the server and its client.
 //
-//	fleetq serve [--queue memory|sqlite|postgres] [--addr :8080] [--fleet DIR]
+//	fluxq serve [--queue memory|sqlite|postgres] [--addr :8080] [--fleet DIR]
 //	  Start the fleet. It comes up with ZERO clusters unless --fleet preloads a
 //	  JGF directory. Register clusters and submit jobs against it via the API.
 //
-//	fleetq cluster register --name c1 --manager flux-operator --nodes 4:64 --caps lammps,efa
-//	fleetq cluster list
-//	fleetq cluster unregister c1
-//	fleetq submit --name job1 --image img --command "lmp -i in.reaxff" --nodes 4 --tasks-per-node 64 --caps lammps,efa
-//	fleetq jobs
-//	fleetq job <id>
-//	fleetq log <id>
+//	fluxq cluster register --name c1 --manager flux-operator --nodes 4:64 --caps lammps,efa
+//	fluxq cluster list
+//	fluxq cluster unregister c1
+//	fluxq submit --name job1 --image img --command "lmp -i in.reaxff" --nodes 4 --tasks-per-node 64 --caps lammps,efa
+//	fluxq jobs
+//	fluxq job <id>
+//	fluxq log <id>
 //
 // The client commands talk to a running server (--server, default
 // http://localhost:8080).
@@ -22,25 +22,25 @@ import (
 )
 
 func usage() {
-	fmt.Fprint(os.Stderr, `fleetq — fleet-level dispatch queue
+	fmt.Fprint(os.Stderr, `fluxq — fleet-level dispatch queue
 
 server:
-  fleetq serve [--queue memory|sqlite|postgres] [--dsn DSN] [--addr :8080] [--fleet DIR]
+  fluxq serve [--queue memory|sqlite|postgres] [--dsn DSN] [--addr :8080] [--fleet DIR]
 
-clusters (edits need --secret / $FLEETQ_SECRET):
-  fleetq managers                                                # supported managers + real/emulated dispatch
-  fleetq cluster register --name N --manager M [--handle H]      # prints a secret
-  fleetq cluster list
-  fleetq cluster unregister --name N
-  fleetq cluster subsystem register   --cluster C --file g.json [--name S] [--descriptive=false]
-  fleetq cluster subsystem unregister --cluster C --name S
+clusters (edits need --secret / $FLUXQ_SECRET):
+  fluxq managers                                                # supported managers + real/emulated dispatch
+  fluxq cluster register --name N --manager M [--handle H]      # prints a secret
+  fluxq cluster list
+  fluxq cluster unregister --name N
+  fluxq cluster subsystem register   --cluster C --file g.json [--name S] [--descriptive=false]
+  fluxq cluster subsystem unregister --cluster C --name S
 
 jobs (content is a Flux jobspec file):
-  fleetq submit  --file job.json
-  fleetq satisfy --file job.json       # dry-run: ranked feasible clusters, allocates nothing
-  fleetq jobs
-  fleetq job <id>
-  fleetq log <id>
+  fluxq submit  --file job.json
+  fluxq satisfy --file job.json       # dry-run: ranked feasible clusters, allocates nothing
+  fluxq jobs
+  fluxq job <id>
+  fluxq log <id>
 
 Client commands accept --server (default http://localhost:8080).
 `)

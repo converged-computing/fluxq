@@ -2,7 +2,7 @@ package cluster
 
 // FluxDriver dispatches flux-uri clusters to a real flux instance via the `flux`
 // CLI, instead of the emulator. With an empty URI it targets the ambient broker
-// (the instance the fleetq server runs inside — `flux start`); with a URI it
+// (the instance the fluxq server runs inside — `flux start`); with a URI it
 // wraps calls in `flux proxy <uri> …` to reach a remote instance.
 //
 // It consumes the same Content the flux-uri transform emits (a `flux submit`
@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 type FluxDriver struct {

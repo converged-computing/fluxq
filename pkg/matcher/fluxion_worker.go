@@ -7,7 +7,7 @@
 // context sidesteps that entirely, and makes "edit a subsystem" a clean
 // kill-and-respawn (a fresh interner, so new types load).
 //
-// The worker is the fleetq binary re-executed with a sentinel arg; RunWorkerIfRequested
+// The worker is the fluxq binary re-executed with a sentinel arg; RunWorkerIfRequested
 // is called at the very top of main() (and from the fluxion test TestMain). It
 // speaks newline-delimited JSON on stdin/stdout: one "init" with the JGF, then
 // "satisfy"/"allocate"/"cancel" requests, one response line each.
@@ -21,7 +21,7 @@ import (
 	"github.com/flux-framework/flux-sched/resource/reapi/bindings/go/src/fluxcli"
 )
 
-// workerArg is the sentinel first argument that turns the fleetq binary into a
+// workerArg is the sentinel first argument that turns the fluxq binary into a
 // reapi worker instead of the normal CLI.
 const workerArg = "__fluxion_worker"
 

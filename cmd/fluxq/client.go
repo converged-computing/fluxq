@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/converged-computing/fleetq/pkg/api"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/api"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // --- tiny HTTP client ---
@@ -37,7 +37,7 @@ func httpDoAuth(method, url, secret string, body any) ([]byte, int, error) {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("%s %s: %w (is `fleetq serve` running?)", method, url, err)
+		return nil, 0, fmt.Errorf("%s %s: %w (is `fluxq serve` running?)", method, url, err)
 	}
 	defer resp.Body.Close()
 	out, _ := io.ReadAll(resp.Body)
@@ -52,12 +52,12 @@ func httpDo(method, url string, body any) ([]byte, int, error) {
 }
 
 func serverFlag(fs *flag.FlagSet) *string {
-	return fs.String("server", "http://localhost:8080", "fleetq server URL")
+	return fs.String("server", "http://localhost:8080", "fluxq server URL")
 }
 
-// secretFlag resolves the per-cluster secret from --secret or $FLEETQ_SECRET.
+// secretFlag resolves the per-cluster secret from --secret or $FLUXQ_SECRET.
 func secretFlag(fs *flag.FlagSet) *string {
-	return fs.String("secret", os.Getenv("FLEETQ_SECRET"), "cluster secret (or $FLEETQ_SECRET) for edits")
+	return fs.String("secret", os.Getenv("FLUXQ_SECRET"), "cluster secret (or $FLUXQ_SECRET) for edits")
 }
 
 // idArg resolves --server and a job id given either positionally (`job job-1`)
@@ -145,7 +145,7 @@ func clusterRegister(args []string) error {
 	fs.Var(&conf, "config", "backend dispatch metadata key=value (repeatable). flux: uri=local|ssh://host/run/flux/local ; k8s: context=NAME|kubeconfig=/path ; emulate=true simulates the backend (satisfy-only).")
 	_ = fs.Parse(args)
 	if *name == "" || *mgr == "" {
-		return fmt.Errorf("usage: fleetq cluster register --name N --manager M [--handle H] [--config k=v ...]")
+		return fmt.Errorf("usage: fluxq cluster register --name N --manager M [--handle H] [--config k=v ...]")
 	}
 	body := api.RegisterRequest{Name: *name, Manager: *mgr, Handle: *handle, Config: conf.Map()}
 	out, _, err := httpDo("POST", *server+"/v1/clusters/register", body)
@@ -158,7 +158,7 @@ func clusterRegister(args []string) error {
 	}
 	fmt.Printf("registered cluster %q (handle %s)\n", resp.Name, resp.Handle)
 	fmt.Printf("secret: %s\n", resp.Secret)
-	fmt.Printf("save it for edits:  export FLEETQ_SECRET=%s\n", resp.Secret)
+	fmt.Printf("save it for edits:  export FLUXQ_SECRET=%s\n", resp.Secret)
 	fmt.Println("note: the cluster is empty. Add a containment subsystem (JGF) before it can schedule.")
 	return nil
 }
@@ -197,7 +197,7 @@ func clusterUnregister(args []string) error {
 	name := fs.String("name", "", "cluster name")
 	_ = fs.Parse(args)
 	if *name == "" {
-		return fmt.Errorf("usage: fleetq cluster unregister --name N --secret S")
+		return fmt.Errorf("usage: fluxq cluster unregister --name N --secret S")
 	}
 	if _, _, err := httpDoAuth("POST", *server+"/v1/clusters/"+*name+"/unregister", *secret, nil); err != nil {
 		return err
@@ -234,7 +234,7 @@ func subsystemRegister(args []string) error {
 	file := fs.String("file", "", "JGF file for the subsystem graph")
 	_ = fs.Parse(args)
 	if *cluster == "" || *file == "" {
-		return fmt.Errorf("usage: fleetq cluster subsystem register --cluster C --file g.json [--name N] [--descriptive=false] --secret S")
+		return fmt.Errorf("usage: fluxq cluster subsystem register --cluster C --file g.json [--name N] [--descriptive=false] --secret S")
 	}
 	sub := *name
 	if sub == "" {
@@ -261,7 +261,7 @@ func subsystemUnregister(args []string) error {
 	name := fs.String("name", "", "subsystem name")
 	_ = fs.Parse(args)
 	if *cluster == "" || *name == "" {
-		return fmt.Errorf("usage: fleetq cluster subsystem unregister --cluster C --name N --secret S")
+		return fmt.Errorf("usage: fluxq cluster subsystem unregister --cluster C --name N --secret S")
 	}
 	if _, _, err := httpDoAuth("DELETE", *server+"/v1/clusters/"+*cluster+"/subsystems/"+*name, *secret, nil); err != nil {
 		return err
@@ -378,7 +378,7 @@ func runJobs(args []string) error {
 func runJob(args []string) error {
 	server, id := idArg(args)
 	if id == "" {
-		return fmt.Errorf("usage: fleetq job <id>")
+		return fmt.Errorf("usage: fluxq job <id>")
 	}
 	out, _, err := httpDo("GET", server+"/v1/jobs/"+id, nil)
 	if err != nil {
@@ -391,7 +391,7 @@ func runJob(args []string) error {
 func runLog(args []string) error {
 	server, id := idArg(args)
 	if id == "" {
-		return fmt.Errorf("usage: fleetq log <id>")
+		return fmt.Errorf("usage: fluxq log <id>")
 	}
 	out, _, err := httpDo("GET", server+"/v1/jobs/"+id+"/log", nil)
 	if err != nil {

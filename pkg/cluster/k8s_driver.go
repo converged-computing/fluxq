@@ -39,8 +39,8 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 type K8sDriver struct {
@@ -161,7 +161,7 @@ func (d *K8sDriver) Submit(target graph.ClusterGraph, c Content) (string, error)
 		if ns != "" {
 			obj.SetNamespace(ns)
 		}
-		created, err := ri.Create(ctx, obj, metav1.CreateOptions{FieldManager: "fleetq"})
+		created, err := ri.Create(ctx, obj, metav1.CreateOptions{FieldManager: "fluxq"})
 		if err != nil {
 			return "", fmt.Errorf("apply %s: %w", gvk.Kind, err)
 		}

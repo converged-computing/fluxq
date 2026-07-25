@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/api"
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/manager"
-	"github.com/converged-computing/fleetq/pkg/policy"
-	"github.com/converged-computing/fleetq/pkg/queue"
-	"github.com/converged-computing/fleetq/pkg/reconcile"
-	"github.com/converged-computing/fleetq/pkg/transform"
+	"github.com/converged-computing/fluxq/pkg/api"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/manager"
+	"github.com/converged-computing/fluxq/pkg/policy"
+	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/reconcile"
+	"github.com/converged-computing/fluxq/pkg/transform"
 )
 
 // runServe starts the fleet: manager loops + HTTP API. It comes up with zero
@@ -68,7 +68,7 @@ func runServe(args []string) error {
 	case "sqlite":
 		d := *dsn
 		if d == "" {
-			d = "file:fleetq.sqlite3?_txlock=immediate"
+			d = "file:fluxq.sqlite3?_txlock=immediate"
 		}
 		db, err := queue.NewSQLiteDB(d)
 		if err != nil {
@@ -87,7 +87,7 @@ func runServe(args []string) error {
 		d := *dsn
 		if d == "" {
 			if d = os.Getenv("DATABASE_URL"); d == "" {
-				d = "postgres://fleetq:fleetq@localhost:5432/fleetq"
+				d = "postgres://fluxq:fluxq@localhost:5432/fluxq"
 			}
 		}
 		pool, err := queue.NewPool(ctx, d)

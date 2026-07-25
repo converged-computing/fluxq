@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/matcher"
-	"github.com/converged-computing/fleetq/pkg/policy"
-	"github.com/converged-computing/fleetq/pkg/queue"
-	"github.com/converged-computing/fleetq/pkg/reconcile"
-	"github.com/converged-computing/fleetq/pkg/score"
-	"github.com/converged-computing/fleetq/pkg/transform"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/policy"
+	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/reconcile"
+	"github.com/converged-computing/fluxq/pkg/score"
+	"github.com/converged-computing/fluxq/pkg/transform"
 )
 
 type Manager struct {

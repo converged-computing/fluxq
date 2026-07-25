@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	kfake "k8s.io/client-go/kubernetes/fake"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // testMapper knows two kinds: a core-group Job and a custom MiniCluster CRD —
@@ -68,7 +68,7 @@ spec:
 `
 
 func TestSubmitGenericManifest(t *testing.T) {
-	target := graph.ClusterGraph{ID: "k8s", Manager: graph.K8sJob, Config: map[string]string{"context": "kind-fleetq"}}
+	target := graph.ClusterGraph{ID: "k8s", Manager: graph.K8sJob, Config: map[string]string{"context": "kind-fluxq"}}
 
 	// A Job and a CRD go through the identical code path.
 	for _, tc := range []struct {

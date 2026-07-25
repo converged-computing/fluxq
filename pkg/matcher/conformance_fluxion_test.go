@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/matcher"
 )
 
 func TestMain(m *testing.M) {

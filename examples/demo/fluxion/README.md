@@ -1,4 +1,4 @@
-# fleetq demo (real Fluxion)
+# fluxq demo (real Fluxion)
 
 A walkthrough of the whole pipeline — **text jobspec → match → dispatch →
 monitor → complete** — using the **real Fluxion scheduler** (flux-sched reapi
@@ -34,7 +34,7 @@ install). Everything else is pure Go.
 make fluxion            # go build -tags fluxion, CGO env from FLUX_SCHED_ROOT
 ```
 
-This produces `./bin/fleetq`. At **runtime** the reapi shared libraries must be
+This produces `./bin/fluxq`. At **runtime** the reapi shared libraries must be
 on the loader path (the server spawns reapi worker subprocesses):
 
 ```bash
@@ -44,7 +44,7 @@ export LD_LIBRARY_PATH=/opt/flux-sched/resource:/opt/flux-sched/resource/reapi/b
 ## 1. Start the server (real Fluxion matcher, dev dispatch)
 
 ```bash
-./bin/fleetq serve --dev --addr :8080
+./bin/fluxq serve --dev --addr :8080
 ```
 
 ```
@@ -65,18 +65,18 @@ Registration returns a **secret** that gates edits to that cluster; the CLI
 prints an `export` line — copy it.
 
 ```bash
-./bin/fleetq cluster register --name alpha --manager flux-operator
+./bin/fluxq cluster register --name alpha --manager flux-operator
 ```
 
 ```
 registered cluster "alpha" (handle flux-operator://alpha)
 secret: e10d6f7c18...      (48 hex chars)
-save it for edits:  export FLEETQ_SECRET=e10d6f7c18...
+save it for edits:  export FLUXQ_SECRET=e10d6f7c18...
 note: the cluster is empty. Add a containment subsystem (JGF) before it can schedule.
 ```
 
 ```bash
-export FLEETQ_SECRET=<paste from above>
+export FLUXQ_SECRET=<paste from above>
 ```
 
 Attach the two subsystems from the bundled quickstart graphs. `containment` is
@@ -84,10 +84,10 @@ Attach the two subsystems from the bundled quickstart graphs. `containment` is
 **descriptive** (satisfy-only capability, `--descriptive=true`):
 
 ```bash
-./bin/fleetq cluster subsystem register --cluster alpha --name containment \
+./bin/fluxq cluster subsystem register --cluster alpha --name containment \
     --descriptive=false --file data/quickstart/alpha.containment.json
 
-./bin/fleetq cluster subsystem register --cluster alpha --name software \
+./bin/fluxq cluster subsystem register --cluster alpha --name software \
     --descriptive=true  --file data/quickstart/alpha.software.json
 ```
 
@@ -102,7 +102,7 @@ traverse that graph.
 ## 3. See what can run where (satisfy-only, no allocation)
 
 ```bash
-./bin/fleetq satisfy --file examples/job-lammps.json
+./bin/fluxq satisfy --file examples/job-lammps.json
 ```
 
 ```
@@ -116,7 +116,7 @@ containment graph can hold it). `satisfy` allocates nothing.
 ## 4. Submit and watch it complete
 
 ```bash
-./bin/fleetq submit --file examples/job-lammps.json
+./bin/fluxq submit --file examples/job-lammps.json
 ```
 
 ```
@@ -124,7 +124,7 @@ containment graph can hold it). `satisfy` allocates nothing.
 ```
 
 ```bash
-./bin/fleetq jobs
+./bin/fluxq jobs
 ```
 
 ```
@@ -146,14 +146,14 @@ status job-0001 -> COMPLETED ([emu] MiniCluster COMPLETED; exit 0)
 Inspect the full job record (spec, placement, native handle, last note):
 
 ```bash
-./bin/fleetq job job-0001
+./bin/fluxq job job-0001
 ```
 
 ## 5. Introspection
 
 ```bash
-./bin/fleetq managers    # which managers dispatch for real vs. emulated
-./bin/fleetq jobs        # the "flux jobs" view
+./bin/fluxq managers    # which managers dispatch for real vs. emulated
+./bin/fluxq jobs        # the "flux jobs" view
 ```
 
 ```
@@ -171,7 +171,7 @@ separate river stages with independent workers and retry — same Fluxion matche
 now with a durable queue on a single local file:
 
 ```bash
-./bin/fleetq serve --dev --queue sqlite --dsn "file:demo.sqlite3?_txlock=immediate" --addr :8080
+./bin/fluxq serve --dev --queue sqlite --dsn "file:demo.sqlite3?_txlock=immediate" --addr :8080
 ```
 
 ```
@@ -191,7 +191,7 @@ the (Fluxion-chosen) cluster, instead of the deterministic templates:
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 export ANTHROPIC_MODEL=claude-sonnet-4-5   # optional; a model your key can use
-./bin/fleetq serve --dev --transform agent --addr :8080
+./bin/fluxq serve --dev --transform agent --addr :8080
 ```
 
 ```

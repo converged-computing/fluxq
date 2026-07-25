@@ -20,21 +20,21 @@ type Postgres struct {
 }
 
 const schemaSQL = `
-CREATE TABLE IF NOT EXISTS fleetq_jobs (
+CREATE TABLE IF NOT EXISTS fluxq_jobs (
     id           text PRIMARY KEY,
     state        text NOT NULL,
     submitted_at timestamptz NOT NULL,
     updated_at   timestamptz NOT NULL,
     data         jsonb NOT NULL
 );
-CREATE INDEX IF NOT EXISTS fleetq_jobs_state_idx ON fleetq_jobs (state, submitted_at);
+CREATE INDEX IF NOT EXISTS fluxq_jobs_state_idx ON fluxq_jobs (state, submitted_at);
 `
 
 // NewPostgres connects a pool and ensures the schema exists. The pool is shared
 // with river (same database), so one connection config drives both.
 func NewPostgres(ctx context.Context, pool *pgxpool.Pool) (*Postgres, error) {
 	if _, err := pool.Exec(ctx, schemaSQL); err != nil {
-		return nil, fmt.Errorf("create fleetq schema: %w", err)
+		return nil, fmt.Errorf("create fluxq schema: %w", err)
 	}
 	return &Postgres{pool: pool}, nil
 }
@@ -48,7 +48,7 @@ func (p *Postgres) upsert(ctx context.Context, j Job) error {
 		return err
 	}
 	_, err = p.pool.Exec(ctx, `
-        INSERT INTO fleetq_jobs (id, state, submitted_at, updated_at, data)
+        INSERT INTO fluxq_jobs (id, state, submitted_at, updated_at, data)
         VALUES ($1, $2, $3, now(), $4)
         ON CONFLICT (id) DO UPDATE
           SET state = EXCLUDED.state, updated_at = now(), data = EXCLUDED.data`,
@@ -67,7 +67,7 @@ func (p *Postgres) Update(j Job) error {
 func (p *Postgres) Get(id string) (Job, bool) {
 	var b []byte
 	err := p.pool.QueryRow(context.Background(),
-		`SELECT data FROM fleetq_jobs WHERE id = $1`, id).Scan(&b)
+		`SELECT data FROM fluxq_jobs WHERE id = $1`, id).Scan(&b)
 	if err != nil {
 		return Job{}, false
 	}
@@ -80,7 +80,7 @@ func (p *Postgres) Get(id string) (Job, bool) {
 
 func (p *Postgres) query(where string, args ...any) []Job {
 	rows, err := p.pool.Query(context.Background(),
-		`SELECT data FROM fleetq_jobs `+where+` ORDER BY submitted_at`, args...)
+		`SELECT data FROM fluxq_jobs `+where+` ORDER BY submitted_at`, args...)
 	if err != nil {
 		return nil
 	}

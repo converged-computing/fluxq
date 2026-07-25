@@ -1,13 +1,13 @@
-// Command fleetq-datagen writes the dummy JGF fleet (real flux-sched schema) for
+// Command fluxq-datagen writes the dummy JGF fleet (real flux-sched schema) for
 // testing without real clusters. Each cluster is data/fleet/<id>/containment.json
-// with capabilities as vertex properties. Regenerate: go run ./cmd/fleetq-datagen
+// with capabilities as vertex properties. Regenerate: go run ./cmd/fluxq-datagen
 package main
 
 import (
 	"log"
 	"os"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/graph"
 )
 
 type clusterSpec struct {

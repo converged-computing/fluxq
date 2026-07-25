@@ -1,10 +1,10 @@
-# fleetq (Python client)
+# fluxq (Python client)
 
-The Python client for fleetq, shipped in the fleetq repo and versioned with it.
+The Python client for fluxq, shipped in the fluxq repo and versioned with it.
 A subcommand dispatcher — room to grow (submit, clusters, …) — with `select`
 as the first subcommand.
 
-- `python -m fleetq select …`  (or the `fleetq-select` entrypoint)
+- `python -m fluxq select …`  (or the `fluxq-select` entrypoint)
 
 `select` reads the manifest tree (raw container facts) + a cluster snapshot, lets
 an agent choose the best container per application (clusters in mind), and writes
@@ -17,15 +17,15 @@ pip install ./client/py[aws]
 
 # offline snapshot:
 curl -s http://localhost:8080/v1/clusters > clusters.json
-fleetq-select --backend aws --model us.anthropic.claude-sonnet-5 \
+fluxq-select --backend aws --model us.anthropic.claude-sonnet-5 \
   --manifests-dir manifests --clusters clusters.json \
   --goal "run LAMMPS efficiently, GPU where available" --out-dir jobspecs
 
 # or live:
-fleetq-select --clusters http://localhost:8080 --manifests-dir manifests
+fluxq-select --clusters http://localhost:8080 --manifests-dir manifests
 ```
 
 GPUs are requested as countable containment; interchangeable interconnects use a
-`requires` `anyof`, matched per-subsystem by fleetq.
+`requires` `anyof`, matched per-subsystem by fluxq.
 
 SPDX-License-Identifier: MIT

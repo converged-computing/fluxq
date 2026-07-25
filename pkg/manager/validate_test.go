@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/queue"
-	"github.com/converged-computing/fleetq/pkg/transform"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/transform"
 )
 
 const (

@@ -15,8 +15,8 @@ package cluster
 import (
 	"fmt"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // Content is the manager-native artifact transform produced: a manifest to

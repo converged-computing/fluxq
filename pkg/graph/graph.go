@@ -24,9 +24,9 @@ const (
 
 const ContainmentSubsystem = "containment"
 
-// KnownManagers is the canonical, ordered set of manager types fleetq understands.
+// KnownManagers is the canonical, ordered set of manager types fluxq understands.
 // Every manager can be emulated; whether it can dispatch for real depends on
-// which drivers a server has registered (see `fleetq managers`).
+// which drivers a server has registered (see `fluxq managers`).
 func KnownManagers() []ManagerType {
 	return []ManagerType{FluxOperator, SlurmOperator, K8sJob, FluxURI}
 }

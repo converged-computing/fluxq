@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/converged-computing/fleetq/pkg/cluster"
+import "github.com/converged-computing/fluxq/pkg/cluster"
 
 // realFluxDriver returns nil in the default build: Flux is emulated-only unless
 // built with -tags fluxcore (real libflux dispatch).

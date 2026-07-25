@@ -11,7 +11,7 @@ package cluster
 // server runs inside (flux_open(NULL)); an "ssh://host/..." URI is opened
 // directly — flux_open speaks ssh natively, so there is no `flux proxy`.
 //
-// Submit takes the RFC-14/25 jobspec fleetq already renders (Content.Kind
+// Submit takes the RFC-14/25 jobspec fluxq already renders (Content.Kind
 // "jobspec") and hands it to flux_job_submit. Status reads the job's state via
 // job-list, and on the terminal INACTIVE state reads the result + waitstatus.
 //
@@ -24,14 +24,14 @@ package cluster
 #include <jansson.h>
 #include <stdlib.h>
 
-static int fleetq_state(flux_future_t *f, int *state) {
+static int fluxq_state(flux_future_t *f, int *state) {
     json_int_t s = 0;
     int rc = flux_rpc_get_unpack(f, "{s:{s:I}}", "job", "state", &s);
     if (rc == 0) *state = (int)s;
     return rc;
 }
 
-static int fleetq_result(flux_future_t *f, int *result, int *waitstatus, int *have_ws) {
+static int fluxq_result(flux_future_t *f, int *result, int *waitstatus, int *have_ws) {
     json_int_t r = 0, ws = 0;
     if (flux_job_result_get_unpack(f, "{s:I s:I}", "result", &r, "waitstatus", &ws) == 0) {
         *result = (int)r; *waitstatus = (int)ws; *have_ws = 1; return 0;
@@ -49,8 +49,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
 // flux_job_state_t values we branch on.
@@ -134,7 +134,7 @@ func (d *FluxCGODriver) Status(target graph.ClusterGraph, handle string) (queue.
 	}
 	defer C.flux_future_destroy(lf)
 	var state C.int
-	if rc := C.fleetq_state(lf, &state); rc != 0 {
+	if rc := C.fluxq_state(lf, &state); rc != 0 {
 		return "", "", fmt.Errorf("read state: %s", futErr(lf))
 	}
 
@@ -154,7 +154,7 @@ func (d *FluxCGODriver) Status(target graph.ClusterGraph, handle string) (queue.
 	}
 	defer C.flux_future_destroy(rf)
 	var result, waitstatus, haveWs C.int
-	if rc := C.fleetq_result(rf, &result, &waitstatus, &haveWs); rc != 0 {
+	if rc := C.fluxq_result(rf, &result, &waitstatus, &haveWs); rc != 0 {
 		return queue.Completed, "inactive", nil
 	}
 	switch int(result) {
@@ -187,7 +187,7 @@ func (d *FluxCGODriver) Cancel(target graph.ClusterGraph, handle string) error {
 	}
 	defer C.flux_close(h)
 
-	reason := C.CString("canceled by fleetq")
+	reason := C.CString("canceled by fluxq")
 	defer C.free(unsafe.Pointer(reason))
 	f, cerr := C.flux_job_cancel(h, id, reason)
 	if f == nil {

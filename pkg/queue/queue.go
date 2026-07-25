@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 type State string

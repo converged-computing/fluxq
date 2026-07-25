@@ -1,6 +1,6 @@
-"""A Flux v1 jobspec, matching fleetq's pkg/jobspec.Jobspec (RFC 25): resources
+"""A Flux v1 jobspec, matching fluxq's pkg/jobspec.Jobspec (RFC 25): resources
 + tasks + attributes, image under attributes.user.image, plus the `requires`
-subsystem map fleetq matches per-subsystem. Kept next to the Go struct on
+subsystem map fluxq matches per-subsystem. Kept next to the Go struct on
 purpose — this is the same wire contract, authored from Python.
 """
 
@@ -15,7 +15,7 @@ from typing import Any
 
 def containment(nodes: int, cores_per_node: int, gpus_per_node: int = 0,
                 mem_gb_per_node: int = 0) -> list[dict]:
-    """node -> slot(default) -> core[+gpu][+memory], mirroring fleetq Containment()."""
+    """node -> slot(default) -> core[+gpu][+memory], mirroring fluxq Containment()."""
     slot_with: list[dict] = [{"type": "core", "count": cores_per_node}]
     if gpus_per_node > 0:
         slot_with.append({"type": "gpu", "count": gpus_per_node})
@@ -26,7 +26,7 @@ def containment(nodes: int, cores_per_node: int, gpus_per_node: int = 0,
 
 
 def anyof(types: list[str]) -> dict:
-    """An OR entry inside a requires section (fleetq's reserved `anyof`)."""
+    """An OR entry inside a requires section (fluxq's reserved `anyof`)."""
     return {"type": "anyof", "with": [{"type": t} for t in types]}
 
 

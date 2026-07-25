@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 // The containment render is the Flux document minus `requires` (subsystems are

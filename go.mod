@@ -1,4 +1,4 @@
-module github.com/converged-computing/fleetq
+module github.com/converged-computing/fluxq
 
 go 1.25.0
 

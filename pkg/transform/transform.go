@@ -16,9 +16,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/converged-computing/fleetq/pkg/cluster"
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/cluster"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 // Transformer compiles agnostic intent into a native artifact for a target.

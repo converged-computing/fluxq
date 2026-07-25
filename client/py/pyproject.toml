@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fleetq-client"
+name = "fluxq-client"
 version = "0.1.0"
-description = "fleetq Python client. Subcommands author and (later) submit jobs; `select` chooses the best container per application."
+description = "fluxq Python client. Subcommands author and (later) submit jobs; `select` chooses the best container per application."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -18,7 +18,7 @@ aws    = ["behalf[aws]>=0.1"]
 dev    = ["pytest>=8"]
 
 [project.scripts]
-fleetq-select = "fleetq.cli:select_entry"
+fluxq-select = "fluxq.cli:select_entry"
 
 [tool.setuptools.packages.find]
-include = ["fleetq*"]
+include = ["fluxq*"]

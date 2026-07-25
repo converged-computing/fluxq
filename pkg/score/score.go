@@ -11,8 +11,8 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/converged-computing/fleetq/pkg/jobspec"
-	"github.com/converged-computing/fleetq/pkg/matcher"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/matcher"
 )
 
 type Scorer interface {

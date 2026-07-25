@@ -8,7 +8,7 @@
 // PROCESS-ISOLATED CONTEXTS. flux-sched's string interner is a process-global
 // singleton that finalizes after the first InitContext, so a second in-process
 // InitContext that introduces a NEW resource type fails ("interner is
-// finalized"). fleetq's subsystems are custom-typed and discovered dynamically,
+// finalized"). fluxq's subsystems are custom-typed and discovered dynamically,
 // so we cannot know all types up front and cannot prime. Instead, EVERY reapi
 // context runs in its OWN worker subprocess (fluxion_worker.go) with its OWN
 // interner. A cluster holds:
@@ -37,8 +37,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/converged-computing/fleetq/pkg/graph"
-	"github.com/converged-computing/fleetq/pkg/jobspec"
+	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/jobspec"
 )
 
 const fluxOpts = `{"matcher_policy": "first", "load_format": "jgf", "match_format": "jgf"}`
