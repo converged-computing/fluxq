@@ -10,6 +10,7 @@ package cluster
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/converged-computing/fluxq/pkg/graph"
 )
@@ -52,8 +53,18 @@ func SubsystemsFromFacts(nodes []NodeFacts) (map[string]*graph.JGF, []int, error
 	add("network", func(n NodeFacts) string { return n.Network })
 
 	memoryGB := make([]int, 0, len(nodes))
+	minMem := 0
 	for _, n := range nodes {
 		memoryGB = append(memoryGB, n.MemoryGB)
+		if n.MemoryGB > 0 && (minMem == 0 || n.MemoryGB < minMem) {
+			minMem = n.MemoryGB
+		}
+	}
+	// Record raw memory as an INTERNAL subsystem the vocabulary reads to compute
+	// fleet-relative ranges. The agent never matches memory-gb directly; it
+	// matches the derived `memory` range dimension.
+	if minMem > 0 {
+		subsystems["memory-gb"] = graph.SingletonSubsystem("memory-gb", strconv.Itoa(minMem))
 	}
 	return subsystems, memoryGB, nil
 }
