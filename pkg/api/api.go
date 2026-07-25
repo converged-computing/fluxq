@@ -83,12 +83,17 @@ type RegisterRequest struct {
 	// Flux: {"uri":"local"} or {"uri":"ssh://host/run/flux/local"}.
 	// Kubernetes (future): {"kubeconfig":"/path/to/kubeconfig"}.
 	Config map[string]string `json:"config,omitempty"`
+	// Discover: after registering, read the cluster's nodes and auto-create
+	// descriptive subsystems (architecture, gpu vendor, network).
+	Discover bool `json:"discover,omitempty"`
 }
 
 type RegisterResponse struct {
-	Name   string `json:"name"`
-	Handle string `json:"handle"`
-	Secret string `json:"secret"`
+	Name          string   `json:"name"`
+	Handle        string   `json:"handle"`
+	Secret        string   `json:"secret"`
+	Discovered    []string `json:"discovered,omitempty"`
+	DiscoverError string   `json:"discover_error,omitempty"`
 }
 
 func (s *Server) registerCluster(w http.ResponseWriter, r *http.Request) {
@@ -131,8 +136,18 @@ func (s *Server) registerCluster(w http.ResponseWriter, r *http.Request) {
 	if ss, ok := s.ClusterAuth.(*secretStore); ok {
 		secret = ss.issue(req.Name)
 	}
+	resp := RegisterResponse{Name: req.Name, Handle: handle, Secret: secret}
+	if req.Discover {
+		// best-effort: the cluster is registered regardless; report what we found
+		// (or why we couldn't). Dispatch is by driver capability, not manager name.
+		names, derr := s.M.DiscoverCluster(req.Name)
+		if derr != nil {
+			resp.DiscoverError = derr.Error()
+		}
+		resp.Discovered = names
+	}
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, RegisterResponse{Name: req.Name, Handle: handle, Secret: secret})
+	writeJSON(w, resp)
 }
 
 func (s *Server) unregisterCluster(w http.ResponseWriter, r *http.Request) {

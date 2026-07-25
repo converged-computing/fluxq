@@ -127,3 +127,23 @@ func (g *JGF) JSON() (string, error) {
 	}
 	return string(b), nil
 }
+
+// SingletonSubsystem builds a one-vertex descriptive subsystem graph whose
+// vertex TYPE is the discovered value (e.g. subsystem "architecture" with type
+// "arm64"). A requires section matches it by type: requires["architecture"] =
+// [{type:"arm64"}]. This is what --discover emits per vocabulary category.
+func SingletonSubsystem(subsystem, valueType string) *JGF {
+	return &JGF{Graph: JGFGraph{
+		Nodes: []Vertex{{
+			ID: "1",
+			Metadata: VertexMeta{
+				Type:     valueType,
+				Basename: valueType,
+				Name:     valueType,
+				UniqID:   1,
+				Size:     1,
+				Paths:    map[string]string{subsystem: "/" + valueType},
+			},
+		}},
+	}}
+}

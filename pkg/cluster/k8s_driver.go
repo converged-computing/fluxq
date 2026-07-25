@@ -52,6 +52,8 @@ type K8sDriver struct {
 	connect func(target graph.ClusterGraph) (dynamic.Interface, kubernetes.Interface, meta.RESTMapper, error)
 }
 
+var _ Discoverer = (*K8sDriver)(nil)
+
 func NewK8sDriver() *K8sDriver {
 	d := &K8sDriver{Timeout: 30 * time.Second}
 	d.connect = realConnect
@@ -328,4 +330,53 @@ func parseHandle(h string) (resource, group, ns, name string) {
 		name = parts[1]
 	}
 	return resource, group, ns, name
+}
+
+// Discover implements Discoverer for Kubernetes: list nodes through the SAME
+// connect seam dispatch uses, and read backend-neutral facts off each.
+func (d *K8sDriver) Discover(target graph.ClusterGraph) ([]NodeFacts, error) {
+	_, typed, _, err := d.connect(target)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d.timeout())
+	defer cancel()
+	nl, err := typed.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("list nodes for %q: %w", target.ID, err)
+	}
+	facts := make([]NodeFacts, 0, len(nl.Items))
+	for _, n := range nl.Items {
+		facts = append(facts, factsFromNode(n))
+	}
+	return facts, nil
+}
+
+// factsFromNode maps a k8s node's labels + allocatable onto backend-neutral
+// NodeFacts. This is the only k8s-specific part of discovery.
+func factsFromNode(n corev1.Node) NodeFacts {
+	lbl := n.Labels
+	f := NodeFacts{Arch: lbl["kubernetes.io/arch"]}
+	switch {
+	case lbl["nvidia.com/gpu.product"] != "" || nodeHasResource(n, "nvidia.com/gpu"):
+		f.GPUVendor = "nvidia"
+	case lbl["amd.com/gpu.device-id"] != "" || nodeHasResource(n, "amd.com/gpu"):
+		f.GPUVendor = "amd"
+	}
+	if nodeHasResource(n, "vpc.amazonaws.com/efa") {
+		f.Network = "efa"
+	} else {
+		f.Network = "ethernet"
+	}
+	if mem, ok := n.Status.Allocatable[corev1.ResourceMemory]; ok {
+		f.MemoryGB = int(mem.Value() / (1 << 30))
+	}
+	return f
+}
+
+func nodeHasResource(n corev1.Node, name corev1.ResourceName) bool {
+	if q, ok := n.Status.Allocatable[name]; ok {
+		return q.Value() > 0
+	}
+	return false
 }

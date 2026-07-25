@@ -137,6 +137,7 @@ func runCluster(args []string) error {
 
 func clusterRegister(args []string) error {
 	fs := flag.NewFlagSet("cluster register", flag.ExitOnError)
+	discover := fs.Bool("discover", false, "auto-create subsystems from the cluster's nodes (k8s: arch/gpu/network)")
 	server := serverFlag(fs)
 	name := fs.String("name", "", "cluster name (identity)")
 	mgr := fs.String("manager", "", "manager: flux-operator|slurm-operator|k8s-job|flux-uri")
@@ -147,7 +148,7 @@ func clusterRegister(args []string) error {
 	if *name == "" || *mgr == "" {
 		return fmt.Errorf("usage: fluxq cluster register --name N --manager M [--handle H] [--config k=v ...]")
 	}
-	body := api.RegisterRequest{Name: *name, Manager: *mgr, Handle: *handle, Config: conf.Map()}
+	body := api.RegisterRequest{Name: *name, Manager: *mgr, Handle: *handle, Config: conf.Map(), Discover: *discover}
 	out, _, err := httpDo("POST", *server+"/v1/clusters/register", body)
 	if err != nil {
 		return err
@@ -157,6 +158,12 @@ func clusterRegister(args []string) error {
 		return err
 	}
 	fmt.Printf("registered cluster %q (handle %s)\n", resp.Name, resp.Handle)
+	if len(resp.Discovered) > 0 {
+		fmt.Printf("discovered subsystems: %s\n", strings.Join(resp.Discovered, ", "))
+	}
+	if resp.DiscoverError != "" {
+		fmt.Printf("discover warning: %s\n", resp.DiscoverError)
+	}
 	fmt.Printf("secret: %s\n", resp.Secret)
 	fmt.Printf("save it for edits:  export FLUXQ_SECRET=%s\n", resp.Secret)
 	fmt.Println("note: the cluster is empty. Add a containment subsystem (JGF) before it can schedule.")
