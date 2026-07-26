@@ -5,8 +5,16 @@ Subcommands via `python -m fluxq <cmd>` or dedicated entrypoints. Today: `select
 """
 
 from .jobspec import SelectedJob, anyof, build_jobspec, containment, save_jobspecs
-from .requires import is_gpu, network_section
+from .requires import is_gpu, gpu_vendor
 from .select import SelectorTask
 
-__all__ = ["SelectorTask", "build_jobspec", "containment", "anyof", "SelectedJob",
-           "save_jobspecs", "is_gpu", "network_section"]
+__all__ = [
+    "SelectorTask",
+    "build_jobspec",
+    "containment",
+    "anyof",
+    "SelectedJob",
+    "save_jobspecs",
+    "is_gpu",
+    "gpu_vendor",
+]

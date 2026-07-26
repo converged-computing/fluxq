@@ -6,7 +6,7 @@
 
 A prototype of the `text prompt → select → transform → dispatch → monitor`
 pipeline, built with Fluxion. `fluxq` is the fleet-level analog of Flux's
-`qmanager`: it allows for registration and query against **fleet resource graphs** 
+`qmanager`: it allows for registration and query against **fleet resource graphs**
 (whole clusters as vertices) to pick a target cluster. After candidate scoring
 and selection, each jobspec is transformed and dispatched.
 
@@ -180,7 +180,7 @@ infeasible there regardless of software.
 
 We are using the Flux v1 jobspec (RFC 25) with an added block requires for subsystems.
 This is based on work that I did for [jobspec nextgen](https://compspec.github.io/jobspec/docs/#/spec?id=requires).
-I still like the design :) 
+I still like the design :)
 
 ```json
 {
@@ -202,10 +202,10 @@ I still like the design :)
 ```
 
 The top-level resources, tasks, and attributes are the **containment** request,
-matched as-is (it is already a valid Flux jobspec. Each `requires.<subsystem>` 
+matched as-is (it is already a valid Flux jobspec. Each `requires.<subsystem>`
 is another section, in the *same* Flux resource vocabulary, that we use for
 fluxq to query subsystems. This allows us to fully define a job's requirements
-across subsystems in one jobspec. Preloading is also JGF: `serve --fleet <dir>` 
+across subsystems in one jobspec. Preloading is also JGF: `serve --fleet <dir>`
 loads a directory of JGF clusters. And storage backends:
 
 ```bash
@@ -260,7 +260,7 @@ out of it.
 Follow the numbers against the commands in §1.
 
 1. **Submit.** `fluxq submit` (or `POST /v1/jobs/submit`) puts a job in the queue in
-   the `SUBMITTED` (provisional) state. 
+   the `SUBMITTED` (provisional) state.
 
 2. **Schedule pass (policy).** Every tick the manager pulls provisional jobs in
    the order the **policy** dictates (`FCFS` or `Backfill`) and tries to place
@@ -295,7 +295,7 @@ Follow the numbers against the commands in §1.
    whole queue at any moment.
 
 
-### In the devcontainer 
+### In the devcontainer
 
 > recommended
 
