@@ -6,78 +6,147 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__))))
 from fluxq.io import load_manifests
-from fluxq.jobspec import save_jobspecs
-from fluxq.requires import is_gpu, network_section, unknown_networks
+from fluxq.requires import gpu_vendor, is_gpu
 from fluxq.select import SelectorTask
 
+VOCAB = {
+    "architecture": ["amd64", "arm64"],
+    "network": ["efa", "ethernet"],
+    "gpu": ["nvidia", "amd"],
+    "memory": ["0-64GB", "64-256GB", "256GB+"],
+}
+REPO = "metric-lammps-gpu"  # catalog is keyed by REPO, not the free-text app name
 
-def _manifest(root, ref, app, needed):
-    parts = ref.replace(":", "/").split("/")
-    d = os.path.join(root, *parts)
+
+def _manifest(root, ref, app, arch, capability):
+    d = os.path.join(root, *ref.replace(":", "/").split("/"))
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, "manifest.json"), "w") as f:
-        json.dump({"entry": {"reproduce": {"reference": ref, "digest": ref + "@sha256:x"},
-                             "artifacts": [{"application": app, "arch": "amd64", "needed": needed}]}}, f)
+    json.dump(
+        {
+            "entry": {
+                "reproduce": {"reference": ref, "digest": ref + "@x"},
+                "artifacts": [
+                    {
+                        "application": app,
+                        "arch": arch,
+                        "capability": capability,
+                        "needed": [],
+                    }
+                ],
+            }
+        },
+        open(os.path.join(d, "manifest.json"), "w"),
+    )
 
 
-def test_network_section_and_validation():
-    assert network_section([]) is None                       # portable -> nothing
-    assert network_section(["efa"]) == [{"type": "efa"}]      # single
-    a = network_section(["efa", "infiniband"])[0]             # several -> anyof
-    assert a["type"] == "anyof" and {"type": "efa"} in a["with"] and {"type": "infiniband"} in a["with"]
-    assert unknown_networks(["efa", "myrinet"]) == ["myrinet"]
-    assert is_gpu(["libcudart.so.12"]) and not is_gpu(["libc.so.6"])
-    print("OK network section + validation; gpu detection")
+def test_capability_facts():
+    assert gpu_vendor({"accelerator": "cuda"}) == "nvidia"
+    assert gpu_vendor({"gpu_libs": ["libamdhip64.so"]}) == "amd"
+    assert is_gpu({"accelerator": "cuda"}) and not is_gpu({"accelerator": "none"})
+    print("OK capability -> gpu presence + vendor facts")
 
 
-class ChooseLibfabricCPU:
+def test_group_by_repo():
+    with tempfile.TemporaryDirectory() as d:
+        _manifest(d, f"ghcr.io/cc/{REPO}:a", "LAMMPS", "amd64", {"accelerator": "cuda"})
+        _manifest(
+            d,
+            f"ghcr.io/cc/{REPO}:b",
+            "LAMMPS (KOKKOS)",
+            "amd64",
+            {"accelerator": "cuda"},
+        )
+        cat = load_manifests(d)
+        assert list(cat) == [REPO] and len(cat[REPO]) == 2, cat
+    print("OK grouped by repo (two free-text names -> one app, two variants)")
+
+
+class Author:
     async def converse(self, task):
         return {}
 
-    async def run_agent(self, system_prompt, user_prompt, tools, confirm_fn):
+    async def run_agent(self, sp, up, tools, cf):
         t = {x.name: x for x in tools}
-        # unknown network must be refused
-        bad = json.loads((await t["record_jobspec"].handler(
-            {"application": "LAMMPS", "reference": "ghcr.io/cc/metric-lammps-cpu:libfabric-reax",
-             "command": ["lmp"], "nodes": 1, "cores_per_node": 8,
-             "network": ["myrinet"]}))["content"][0]["text"])
-        assert "error" in bad and "unknown network" in bad["error"], bad
-        # the libfabric CPU build asks for a fabric (efa OR infiniband), no GPUs
+        v = json.loads((await t["get_vocabulary"].handler({}))["content"][0]["text"])
+        assert v["gpu"] == ["nvidia", "amd"]
+        json.loads(
+            (await t["get_variants"].handler({"application": REPO}))["content"][0][
+                "text"
+            ]
+        )
+        bad = json.loads(
+            (
+                await t["record_jobspec"].handler(
+                    {
+                        "application": REPO,
+                        "reference": f"ghcr.io/cc/{REPO}:cpu",
+                        "command": ["lmp"],
+                        "nodes": 1,
+                        "gpus_per_node": 4,
+                    }
+                )
+            )["content"][0]["text"]
+        )
+        assert "not GPU-capable" in bad["error"], bad
         await t["record_jobspec"].handler(
-            {"application": "LAMMPS", "reference": "ghcr.io/cc/metric-lammps-cpu:libfabric-reax",
-             "command": ["lmp", "-in", "in.reaxc"], "nodes": 8, "cores_per_node": 32,
-             "network": ["efa", "infiniband"],
-             "reasoning": "CPU REAX build; libfabric -> needs a fast fabric, efa or infiniband"})
+            {
+                "application": REPO,
+                "reference": f"ghcr.io/cc/{REPO}:gpu",
+                "command": ["lmp", "-in", "in.reaxff"],
+                "nodes": 4,
+                "gpus_per_node": 1,
+                "network": ["efa", "ethernet"],
+                "memory": "64-256GB",
+                "reasoning": "cuda; fabric; medium",
+            }
+        )
+        await t["skip_application"].handler(
+            {"application": "flux-core", "reason": "infra"}
+        )
         return None
 
 
-def test_libfabric_container_requires_a_fabric_not_the_app():
+def test_end_to_end():
     with tempfile.TemporaryDirectory() as d:
-        mdir = os.path.join(d, "manifests")
-        _manifest(mdir, "ghcr.io/cc/metric-lammps-cpu:libfabric-reax", "LAMMPS",
-                  ["libmpi.so.40", "libc.so.6"])  # note: no libfabric in NEEDED
-        clusters = os.path.join(d, "clusters.json")
-        with open(clusters, "w") as f:
-            json.dump([{"name": "efa-flux", "manager": "flux", "nodes": 16,
-                        "capabilities": ["efa"]}], f)
-        jobs = asyncio.run(SelectorTask().execute(ChooseLibfabricCPU(),
-                    {"manifests_dir": mdir, "clusters": clusters, "goal": "cpu reax"},
-                    lambda n, a: True))
-        js = jobs[0].jobspec
-        req = js["requires"]
-        # the useful requirement is present ...
-        assert "network" in req and req["network"][0]["type"] == "anyof"
-        types = {c["type"] for c in req["network"][0]["with"]}
-        assert types == {"efa", "infiniband"}, req
-        # ... and the illogical one is gone
-        assert "software" not in req, "must NOT require the application (it is in the container)"
-        # cpu build -> no gpu in containment
-        slot = js["resources"][0]["with"][0]["with"]
-        assert all(r["type"] != "gpu" for r in slot)
-        print("OK libfabric container requires a fabric (anyof efa/infiniband), not 'lammps'")
+        _manifest(
+            d,
+            f"ghcr.io/cc/{REPO}:cpu",
+            "LAMMPS",
+            "amd64",
+            {"accelerator": "none", "gpu_libs": []},
+        )
+        _manifest(
+            d,
+            f"ghcr.io/cc/{REPO}:gpu",
+            "LAMMPS",
+            "amd64",
+            {"accelerator": "cuda", "gpu_libs": ["libcudart.so.12"]},
+        )
+        task = SelectorTask()
+        jobs = asyncio.run(
+            task.execute(
+                Author(),
+                {
+                    "manifests_dir": d,
+                    "clusters": [],
+                    "vocabulary": VOCAB,
+                    "goal": "gpu lammps",
+                },
+                lambda n, a: True,
+            )
+        )
+        assert len(jobs) == 1 and task._skipped[0]["application"] == "flux-core"
+        req = jobs[0].jobspec["requires"]
+        assert req["architecture"] == [{"type": "amd64"}]
+        assert req["gpu"] == [{"type": "nvidia"}]
+        assert req["network"][0]["type"] == "anyof"
+        assert req["memory"] == [{"type": "64-256GB"}]
+        assert "software" not in req
+        print("OK reconciliation: facts stamped, judgment validated, app skipped")
 
 
 if __name__ == "__main__":
-    test_network_section_and_validation()
-    test_libfabric_container_requires_a_fabric_not_the_app()
-    print("\nall fluxq-select tests passed")
+    test_capability_facts()
+    test_group_by_repo()
+    test_end_to_end()
+    print("\nall selector tests passed")

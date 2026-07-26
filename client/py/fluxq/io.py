@@ -25,15 +25,24 @@ def load_manifests(manifests_dir: str) -> dict[str, list[dict]]:
         doc = read_json(os.path.join(dirpath, "manifest.json"))
         entry = doc.get("entry", doc)
         repro = entry.get("reproduce", {})
+        ref = repro.get("reference", "")
+        # Group by container REPO (metric-lammps-cpu), NOT the free-text
+        # `application` field — that field is inconsistent across a repo's
+        # variants (many names for one app), which would split one app into many
+        # jobspecs. The free-text name is kept per-variant for the agent's context.
+        repo = ref.split("@")[0].rsplit(":", 1)[0].rsplit("/", 1)[-1] or "unknown"
         for art in entry.get("artifacts", []):
-            app = art.get("application") or "unknown"
-            catalog.setdefault(app, []).append({
-                "reference": repro.get("reference", ""),
-                "digest": repro.get("digest", ""),
-                "arch": art.get("arch", ""),
-                "needed": art.get("needed", []),
-                "provenance": art.get("provenance", {}),
-            })
+            catalog.setdefault(repo, []).append(
+                {
+                    "reference": ref,
+                    "digest": repro.get("digest", ""),
+                    "arch": art.get("arch", ""),
+                    "application": art.get("application", ""),
+                    "capability": art.get("capability", {}),
+                    "needed": art.get("needed", []),
+                    "provenance": art.get("provenance", {}),
+                }
+            )
     return catalog
 
 
@@ -50,3 +59,18 @@ def load_clusters(source: Any) -> list[dict]:
     if isinstance(source, dict):
         source = source.get("clusters", [])
     return source or []
+
+
+def load_vocabulary(source):
+    """The fleet's allowed label set: a file, a fluxq base URL (GET
+    /v1/vocabulary), or an already-loaded dict. Returns {dimension: [values]}."""
+    if isinstance(source, str) and source.startswith(("http://", "https://")):
+        url = source.rstrip("/") + "/v1/vocabulary"
+        with urllib.request.urlopen(url) as r:  # nosec - operator-provided fluxq URL
+            source = json.loads(r.read().decode())
+    elif isinstance(source, str):
+        source = read_json(source)
+    dims = source.get("dimensions", source) if isinstance(source, dict) else []
+    if isinstance(dims, list):  # [{name, values}, ...] -> {name: values}
+        return {d["name"]: d.get("values", []) for d in dims}
+    return dims or {}
