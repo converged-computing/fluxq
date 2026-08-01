@@ -4,3 +4,4 @@ bin
 jobspecs
 manifests
 .env
+*.sqlite3

@@ -2,6 +2,7 @@
   "name": "fluxq (real Fluxion + river/Postgres)",
   "dockerFile": "Dockerfile",
   "context": "..",
+  "forwardPorts": [8080],
   "customizations": { "vscode": { "extensions": ["golang.go"] } },
   "postCreateCommand": "make db-up && echo 'real Fluxion: make fluxion; run: make run'"
 }
