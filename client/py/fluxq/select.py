@@ -1,5 +1,9 @@
 """SelectorTask: choose the best container per application and author a fluxq
-jobspec, reconciling the manifest's terms against the fleet's vocabulary.
+jobspec, reconciling the manifest's terms against the standard vocabulary.
+
+The fleet is NOT an input. A container is chosen for what the application needs,
+not for what clusters happen to exist, so jobspecs can be authored with nothing
+running — and the choice cannot be tailored to guarantee a match.
 
 The agent is handed (manifests, vocabulary). It chooses a container and supplies
 JUDGMENT (command from the container URI, node count, memory bucket, which
@@ -16,15 +20,15 @@ from typing import Any
 
 from behalf import AgentRunner, ConfirmFn, Task, ToolSpec
 
-from .io import load_clusters, load_manifests, load_vocabulary
+from .io import load_manifests, load_vocabulary
 from .jobspec import SelectedJob, build_jobspec
-from .requires import gpu_vendor, is_gpu, section, validate
+from .requires import gpu_vendor, is_gpu, launcher_in, section, validate
 
 SELECT = """You turn each profiled application into ONE fluxq jobspec, choosing the
-best container and reconciling the manifest against the fleet vocabulary.
+best container and reconciling the manifest against the standard vocabulary.
 
-First call get_vocabulary — it lists the dimensions the fleet can match on and
-the ONLY allowed values for each (architecture, network, gpu, memory ranges).
+First call get_vocabulary — it lists the scheduling dimensions and the ONLY
+allowed values for each (architecture, network, gpu, memory ranges).
 You must classify into those exact values; a value not in the vocabulary will not
 match anything.
 
@@ -35,9 +39,16 @@ with:
   - reference: the chosen container (from get_variants)
   - command: how to run this app (derive from the container/app — e.g. LAMMPS ->
     lmp -in <deck>; osu -> the benchmark binary). Size the input to the node count.
+    Give the APPLICATION command only — never a launcher. Do NOT prefix it with
+    mpirun/mpiexec/srun/flux run: the runtime launches the tasks.
+
+You are NOT scheduling. You choose the container and the NODE COUNT only. Do not
+specify cores or ranks — the nodes are requested exclusively (whole node) and the
+transform derives cores and ranks from whatever cluster the job is matched to.
   - nodes: the target size (given to you below)
-  - gpus_per_node: >0 ONLY if the container is GPU-capable (capability.accelerator
-    is cuda, or gpu_libs present)
+  - needs_gpu: true ONLY if the container is GPU-capable (capability.accelerator
+    is cuda, or gpu_libs present). This asks for a node WITH a GPU; you do not
+    say how many, because the cluster is not chosen yet.
   - network: the acceptable fabric(s) for this build, chosen from the vocabulary's
     network values (a build wanting a fast fabric can list several to OR over; a
     portable build: omit). capability.fabric_* is often unreliable, so read the
@@ -54,7 +65,7 @@ recording a jobspec."""
 
 SETUP = """You are setting up a selection run. Ask only what you can't infer: the
 goal, and optionally which applications to limit to. Then finalize a manifest
-with manifests_dir, clusters, vocabulary, goal, out_dir."""
+with manifests_dir, vocabulary, goal, out_dir."""
 
 
 def _text(obj: Any) -> dict:
@@ -67,7 +78,6 @@ class SelectorTask(Task):
     def manifest_schema(self) -> dict:
         return {
             "manifests_dir": str,
-            "clusters": str,
             "vocabulary": str,
             "goal": str,
             "out_dir": str,
@@ -81,7 +91,7 @@ class SelectorTask(Task):
         return SELECT
 
     def selection_tools(
-        self, catalog, clusters, vocab, sink, skipped, manifest
+        self, catalog, vocab, sink, skipped, manifest
     ) -> list[ToolSpec]:
         async def list_applications(a):
             return _text(
@@ -105,9 +115,6 @@ class SelectorTask(Task):
         async def get_vocabulary(a):
             return _text(vocab)
 
-        async def list_clusters(a):
-            return _text(clusters)
-
         async def skip_application(a):
             skipped.append(
                 {"application": a.get("application", ""), "reason": a.get("reason", "")}
@@ -121,11 +128,11 @@ class SelectorTask(Task):
                 return _text({"error": f"{ref!r} is not a profiled variant of {app!r}"})
             var = variants[ref]
             cap = var.get("capability", {})
-            gpus = int(a.get("gpus_per_node", 0))
-            if gpus > 0 and not is_gpu(cap):
+            needs_gpu = bool(a.get("needs_gpu", False))
+            if needs_gpu and not is_gpu(cap):
                 return _text(
                     {
-                        "error": f"requested {gpus} gpus but {ref} is not GPU-capable "
+                        "error": f"needs_gpu set but {ref} is not GPU-capable "
                         f"(accelerator={cap.get('accelerator')!r}, no gpu_libs)"
                     }
                 )
@@ -135,7 +142,7 @@ class SelectorTask(Task):
             arch = var.get("arch", "")
             if arch and arch in vocab.get("architecture", []):
                 requires["architecture"] = [{"type": arch}]
-            if is_gpu(cap):
+            if needs_gpu:
                 vend = gpu_vendor(cap)
                 if vend and vend in vocab.get("gpu", []):
                     requires["gpu"] = [{"type": vend}]
@@ -159,8 +166,7 @@ class SelectorTask(Task):
                 image=ref,
                 command=a["command"],
                 nodes=a.get("nodes", 1),
-                cores_per_node=a.get("cores_per_node", 1),
-                gpus_per_node=gpus,
+                needs_gpu=needs_gpu,
                 duration_s=a.get("duration_s", manifest.get("duration_s", 3600)),
                 requires=requires or None,
             )
@@ -184,7 +190,7 @@ class SelectorTask(Task):
             ),
             ToolSpec(
                 "get_vocabulary",
-                "The fleet's dimensions and the ONLY allowed values for each.",
+                "The scheduling dimensions and the ONLY allowed values for each.",
                 {},
                 get_vocabulary,
             ),
@@ -195,12 +201,6 @@ class SelectorTask(Task):
                 get_variants,
             ),
             ToolSpec(
-                "list_clusters",
-                "Available clusters (context; you don't pick one).",
-                {},
-                list_clusters,
-            ),
-            ToolSpec(
                 "skip_application",
                 "Skip a container that is not a real HPC/AI-ML app.",
                 {"application": str, "reason": str},
@@ -208,16 +208,17 @@ class SelectorTask(Task):
             ),
             ToolSpec(
                 "record_jobspec",
-                "Emit one jobspec. reference + command + nodes + gpus_per_node + network (from vocab) "
-                "+ memory (a vocab range). Image, architecture and gpu vendor are stamped from the "
-                "manifest; never supply them and never require the application.",
+                "Emit one jobspec: reference + command + nodes + needs_gpu + network (from vocab) "
+                "+ memory (a vocab range). Nodes are requested EXCLUSIVELY — do not specify cores "
+                "or ranks; the transform derives those from the matched cluster. Image, architecture "
+                "and gpu vendor are stamped from the manifest; never supply them, and never require "
+                "the application itself.",
                 {
                     "application": str,
                     "reference": str,
                     "command": list,
                     "nodes": int,
-                    "cores_per_node": int,
-                    "gpus_per_node": int,
+                    "needs_gpu": bool,
                     "duration_s": int,
                     "network": list,
                     "memory": str,
@@ -231,7 +232,6 @@ class SelectorTask(Task):
         self, runner: AgentRunner, manifest: dict, confirm_fn: ConfirmFn
     ) -> list[SelectedJob]:
         catalog = load_manifests(manifest["manifests_dir"])
-        clusters = load_clusters(manifest.get("clusters"))
         vocab = (
             load_vocabulary(manifest.get("vocabulary"))
             if manifest.get("vocabulary")
@@ -239,7 +239,7 @@ class SelectorTask(Task):
         )
         sink: list[SelectedJob] = []
         skipped: list[dict] = []
-        tools = self.selection_tools(catalog, clusters, vocab, sink, skipped, manifest)
+        tools = self.selection_tools(catalog, vocab, sink, skipped, manifest)
         await runner.run_agent(
             self.execute_system_prompt(manifest),
             f"Author jobspecs. Goal: {manifest.get('goal', 'run each application well')}",

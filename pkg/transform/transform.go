@@ -100,21 +100,85 @@ spec:
 `, js.Name(), js.Nodes(), js.Nodes(), js.Image(), quoteList(js.Command()))
 }
 
-func miniCluster(js jobspec.Jobspec, _ graph.ClusterGraph) string {
+func miniCluster(js jobspec.Jobspec, target graph.ClusterGraph) string {
+	// launcher: true so the operator does NOT wrap the command in its own flux
+	// submit. flux-secretary owns submission: it runs inside the allocation,
+	// reads what Flux actually has, and sizes the launch accordingly. Nothing out
+	// here can know that. tasks: 0 keeps the operator from adding an -n of its
+	// own, which produced "alloc denied due to type=unsatisfiable".
 	return fmt.Sprintf(`apiVersion: flux-framework.org/v1alpha2
 kind: MiniCluster
 metadata:
   name: %s
 spec:
   size: %d
-  tasks: %d
-  containers:
+  tasks: 0
+  launcher: true
+%s%s  containers:
     - image: %s
       command: %q
-`, js.Name(), js.Nodes(), js.TasksTotal(), js.Image(), strings.Join(js.Command(), " "))
+      commands:
+        pre: %s
+%s`, js.Name(), js.Nodes(), fluxBlock(target), secretaryVolume(target, "  "),
+		js.Image(), secretaryCommand(js), secretaryInstall,
+		secretaryVolume(target, "      "))
 }
 
-func slurmJob(js jobspec.Jobspec, _ graph.ClusterGraph) string {
+// The secretary is installed with the interpreter Flux ships its bindings for.
+// The bindings are compiled, so the container's own python3 may import the
+// package but not flux.
+const secretaryInstall = "flux python -m pip install --user --quiet flux-secretary"
+
+// secretaryCommand wraps the workload. The command is passed through untouched
+// after the separator: the secretary chooses how to launch it, never what to run.
+func secretaryCommand(js jobspec.Jobspec) string {
+	return fmt.Sprintf("flux python -m fluxsecretary.cli run --nodes %d -- %s",
+		js.Nodes(), strings.Join(js.Command(), " "))
+}
+
+// secretaryVolume renders the agent token volume, when the cluster was
+// registered with one. It is emitted TWICE: at the spec level to declare the
+// volume, and under the container to mount it. Without a token the secretary
+// falls back to its deterministic ladder, so a fleet with no token still runs.
+// The CRD takes environment as plain key/value with no secretKeyRef, so a
+// mounted secret is how a token gets in.
+func secretaryVolume(target graph.ClusterGraph, indent string) string {
+	name := target.Cfg("secretary_secret")
+	if name == "" {
+		return ""
+	}
+	return fmt.Sprintf(`%svolumes:
+%s  secretary-token:
+%s    path: /etc/flux-secretary
+%s    secretName: %s
+`, indent, indent, indent, indent, name)
+}
+
+// fluxBlock adds MiniCluster-level flux settings derived from the target. An
+// arm64 cluster needs the arm flux view, or the operator installs x86 binaries.
+func fluxBlock(target graph.ClusterGraph) string {
+	if isArm(target) {
+		return "  flux:\n    arch: \"arm\"\n"
+	}
+	return ""
+}
+
+// isArm reports whether the target advertises an arm64 architecture.
+func isArm(target graph.ClusterGraph) bool {
+	g := target.Subsystems["architecture"]
+	if g == nil {
+		return false
+	}
+	for i := range g.Graph.Nodes {
+		switch g.Graph.Nodes[i].Metadata.Type {
+		case "arm64", "aarch64", "arm":
+			return true
+		}
+	}
+	return false
+}
+
+func slurmJob(js jobspec.Jobspec, target graph.ClusterGraph) string {
 	return fmt.Sprintf(`apiVersion: slurm.schedmd.com/v1
 kind: SlurmJob
 metadata:

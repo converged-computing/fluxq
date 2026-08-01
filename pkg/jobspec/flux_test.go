@@ -2,6 +2,7 @@ package jobspec_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,5 +83,90 @@ func TestAccessors(t *testing.T) {
 	}
 	if js.Duration() != 2*time.Hour {
 		t.Fatalf("duration: %v", js.Duration())
+	}
+}
+
+func TestWholeNodeRequestIsExclusiveToFluxion(t *testing.T) {
+	// A node-level request with no cores: the Fluxion query must ask for the NODE
+	// exclusively, not for one core on each node.
+	js := jobspec.Jobspec{
+		Version: 1,
+		Resources: []jobspec.Resource{{
+			Type: "node", Count: 3, Exclusive: true,
+			With: []jobspec.Resource{{Type: "slot", Count: 1, Label: "default"}},
+		}},
+		Tasks: []jobspec.Task{{
+			Command: []string{"lmp"}, Slot: "default",
+			Count: map[string]int{"per_slot": 1},
+		}},
+	}
+	if !js.Exclusive() {
+		t.Fatal("a node marked exclusive must report Exclusive()")
+	}
+	out, err := js.ToFluxSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "exclusive") {
+		t.Fatalf("fluxion query dropped exclusivity:\n%s", out)
+	}
+
+	// no cores authored at all -> still whole nodes
+	js2 := jobspec.Jobspec{Version: 1, Resources: []jobspec.Resource{{
+		Type: "node", Count: 2,
+		With: []jobspec.Resource{{Type: "slot", Count: 1, Label: "default"}},
+	}}}
+	if !js2.Exclusive() {
+		t.Fatal("a node request with no cores means whole nodes")
+	}
+}
+
+func TestSlotAboveNodeCountsAndStaysExclusive(t *testing.T) {
+	// The authored shape: slot(count=N) -> node(count=1, exclusive). Nodes must
+	// still count as N, and the whole-node intent must survive to Fluxion.
+	js := jobspec.Jobspec{
+		Version: 1,
+		Resources: []jobspec.Resource{{
+			Type: "slot", Count: 3, Label: "default",
+			With: []jobspec.Resource{{Type: "node", Count: 1, Exclusive: true}},
+		}},
+		Tasks: []jobspec.Task{{
+			Command: []string{"lmp"}, Slot: "default",
+			Count: map[string]int{"per_slot": 1},
+		}},
+	}
+	if n := js.Nodes(); n != 3 {
+		t.Fatalf("slot-above-node should count 3 nodes, got %d", n)
+	}
+	if !js.Exclusive() {
+		t.Fatal("exclusive node under a slot must report Exclusive()")
+	}
+	if got := js.TasksTotal(); got != 3 {
+		t.Fatalf("one task per node -> 3, got %d", got)
+	}
+	out, err := js.ToFluxSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "exclusive") {
+		t.Fatalf("fluxion query dropped exclusivity:\n%s", out)
+	}
+}
+
+func TestSubsystemQueryNeverAsksForZero(t *testing.T) {
+	// A requires entry names a capability and carries no count. Fluxion reads
+	// count literally, so a zero count silently matches nothing — every type in
+	// the rendered query must ask for at least one.
+	for _, section := range [][]jobspec.Resource{
+		{{Type: "amd64"}},
+		{{Type: "lammps", With: []jobspec.Resource{{Type: "kokkos"}}}},
+	} {
+		out, err := jobspec.SubsystemFluxSpec(section)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(out, `"count":0`) {
+			t.Fatalf("subsystem query asks for zero resources:\n%s", out)
+		}
 	}
 }

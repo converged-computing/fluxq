@@ -49,21 +49,12 @@ type ClusterGraph struct {
 	Descriptive map[string]bool
 }
 
-// Containment returns the consuming graph.
-func (c ClusterGraph) Containment() *JGF { return c.Subsystems[ContainmentSubsystem] }
-
-// Cfg returns a backend dispatch-config value (nil-safe).
-func (c ClusterGraph) Cfg(key string) string { return c.Config[key] }
-
-// Emulated reports whether this cluster is an explicit simulation (config
-// emulate=true) rather than a request to dispatch to a real backend. This is a
-// core dispatch-mode selector — the one reserved config key the core reads;
-// everything else in Config is backend-interpreted.
-func (c ClusterGraph) Emulated() bool { return c.Cfg("emulate") == "true" }
-
-// Capabilities returns the capability property keys on the cluster root vertex
-// (everything except the reserved manager/handle keys). These are matched by
-// Flux jobspec constraints in the real matcher.
+// Capabilities returns the non-reserved property keys on the containment root.
+//
+// This is a raw JGF accessor for hand-authored graphs that carry RFC-31
+// key-presence properties; it is NOT an advertised capability set and nothing in
+// matching consults it. What a cluster offers is its SUBSYSTEMS (see
+// vocabulary.Values) — the graphs the matcher actually traverses.
 func (c ClusterGraph) Capabilities() map[string]bool {
 	out := map[string]bool{}
 	g := c.Containment()
@@ -82,6 +73,57 @@ func (c ClusterGraph) Capabilities() map[string]bool {
 	}
 	return out
 }
+
+// Containment returns the consuming graph.
+func (c ClusterGraph) Containment() *JGF { return c.Subsystems[ContainmentSubsystem] }
+
+// Cfg returns a backend dispatch-config value (nil-safe).
+// CoresPerNode is the SMALLEST core count across the cluster's node vertices,
+// or 0 when containment does not say. A transform sizing a job to the cluster
+// must fit the smallest node, since any node may be allocated. This is the
+// level-2 fact a jobspec cannot carry: the selector chooses a node count without
+// knowing which cluster it will land on.
+func (c ClusterGraph) CoresPerNode() int {
+	g := c.Containment()
+	if g == nil {
+		return 0
+	}
+	byID, children := g.IndexExported()
+	minCores := 0
+	for _, n := range g.VerticesOfTypeExported("node") {
+		cores := 0
+		var walk func(id string)
+		walk = func(id string) {
+			for _, cid := range children[id] {
+				v := byID[cid]
+				if v == nil {
+					continue
+				}
+				size := v.Metadata.Size
+				if size <= 0 {
+					size = 1
+				}
+				if v.Metadata.Type == "core" {
+					cores += size
+				}
+				walk(cid)
+			}
+		}
+		walk(n.ID)
+		if cores > 0 && (minCores == 0 || cores < minCores) {
+			minCores = cores
+		}
+	}
+	return minCores
+}
+
+func (c ClusterGraph) Cfg(key string) string { return c.Config[key] }
+
+// Emulated reports whether this cluster is an explicit simulation (config
+// emulate=true) rather than a request to dispatch to a real backend. This is a
+// core dispatch-mode selector — the one reserved config key the core reads;
+// everything else in Config is backend-interpreted.
+func (c ClusterGraph) Emulated() bool { return c.Cfg("emulate") == "true" }
 
 // Fleet is a concurrency-safe registry of clusters. Clusters can be added and
 // removed at runtime (via the API), so it is always used as *Fleet and must not

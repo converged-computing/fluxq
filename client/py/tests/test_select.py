@@ -82,7 +82,7 @@ class Author:
                         "reference": f"ghcr.io/cc/{REPO}:cpu",
                         "command": ["lmp"],
                         "nodes": 1,
-                        "gpus_per_node": 4,
+                        "needs_gpu": True,
                     }
                 )
             )["content"][0]["text"]
@@ -94,7 +94,7 @@ class Author:
                 "reference": f"ghcr.io/cc/{REPO}:gpu",
                 "command": ["lmp", "-in", "in.reaxff"],
                 "nodes": 4,
-                "gpus_per_node": 1,
+                "needs_gpu": True,
                 "network": ["efa", "ethernet"],
                 "memory": "64-256GB",
                 "reasoning": "cuda; fabric; medium",
@@ -145,8 +145,31 @@ def test_end_to_end():
         print("OK reconciliation: facts stamped, judgment validated, app skipped")
 
 
+def test_no_launcher_and_ranks_from_tasks_per_node():
+    from fluxq.jobspec import build_jobspec
+    from fluxq.requires import launcher_in
+
+    assert launcher_in(["mpirun", "-np", "12", "lmp"]) == "mpirun"
+    assert launcher_in(["/usr/bin/srun", "lmp"]) == "srun"
+    assert launcher_in(["lmp", "-in", "in.lj"]) is None
+    js = build_jobspec(name="x", image="img", command=["lmp", "-in", "in.lj"], nodes=3)
+    slot = js["resources"][0]
+    # slot ABOVE node: one task per whole node
+    assert slot["type"] == "slot" and slot["count"] == 3 and slot["label"] == "default"
+    node = slot["with"][0]
+    assert node["type"] == "node" and node["count"] == 1 and node["exclusive"] is True
+    # NO cores anywhere — the cluster is not chosen, so core counts are unknowable
+    assert "with" not in node, node
+    assert js["tasks"][0]["command"][0] == "lmp", "no launcher in the command"
+    # gpu is presence, not a count
+    g = build_jobspec(name="x", image="img", command=["a"], nodes=1, needs_gpu=True)
+    assert g["resources"][0]["with"][0]["with"] == [{"type": "gpu", "count": 1}]
+    print("OK whole-node request; no core/rank guessing; gpu as presence")
+
+
 if __name__ == "__main__":
     test_capability_facts()
+    test_no_launcher_and_ranks_from_tasks_per_node()
     test_group_by_repo()
     test_end_to_end()
     print("\nall selector tests passed")

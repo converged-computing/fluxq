@@ -59,3 +59,16 @@ def section(values: list[str]) -> list | None:
     if not vals:
         return None
     return [anyof(vals)] if len(vals) > 1 else [{"type": vals[0]}]
+
+
+# Launchers the RUNTIME provides. A jobspec declares parallelism in
+# tasks[].count; wrapping the command in a launcher double-launches under flux.
+LAUNCHERS = ("mpirun", "mpiexec", "srun", "flux", "jsrun", "aprun", "oshrun", "prun")
+
+
+def launcher_in(command: list[str]) -> str | None:
+    """The launcher a command starts with, if any (so it can be rejected)."""
+    if not command:
+        return None
+    head = str(command[0]).rsplit("/", 1)[-1].lower()
+    return head if head in LAUNCHERS else None

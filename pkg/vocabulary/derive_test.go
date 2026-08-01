@@ -22,9 +22,9 @@ func find(v Vocabulary, name string) *Dimension {
 
 func TestDeriveHeterogeneousFleet(t *testing.T) {
 	fleet := []graph.ClusterGraph{
-		cluster("gke-arm", map[string]string{"architecture": "arm64", "network": "ethernet", "memory-gb": "128"}),
-		cluster("eks-nvidia", map[string]string{"architecture": "amd64", "network": "efa", "gpu": "nvidia", "memory-gb": "256"}),
-		cluster("eks-amd", map[string]string{"architecture": "amd64", "network": "efa", "gpu": "amd", "memory-gb": "512"}),
+		cluster("gke-arm", map[string]string{"architecture": "arm64", "network": "ethernet", "memory": "64-192GB"}),
+		cluster("eks-nvidia", map[string]string{"architecture": "amd64", "network": "efa", "gpu": "nvidia", "memory": "192GB+"}),
+		cluster("eks-amd", map[string]string{"architecture": "amd64", "network": "efa", "gpu": "amd", "memory": "192GB+"}),
 	}
 	v := Derive(fleet)
 
@@ -47,14 +47,16 @@ func TestDeriveHeterogeneousFleet(t *testing.T) {
 
 func TestGpuDroppedWhenHomogeneous(t *testing.T) {
 	fleet := []graph.ClusterGraph{
-		cluster("a", map[string]string{"gpu": "nvidia", "memory-gb": "256"}),
-		cluster("b", map[string]string{"gpu": "nvidia", "memory-gb": "256"}),
+		cluster("a", map[string]string{"gpu": "nvidia", "memory": "192GB+"}),
+		cluster("b", map[string]string{"gpu": "nvidia", "memory": "192GB+"}),
 	}
 	v := Derive(fleet)
 	if find(v, "gpu") != nil {
 		t.Fatal("single-vendor fleet must NOT expose a gpu dimension")
 	}
-	if find(v, "memory") != nil {
-		t.Fatal("uniform memory must NOT expose a memory dimension")
+	// Memory buckets are absolute, so a uniform fleet still advertises its
+	// bucket — it simply offers one value rather than several.
+	if d := find(v, "memory"); d == nil || len(d.Values) != 1 {
+		t.Fatalf("uniform fleet should advertise exactly one memory bucket: %+v", d)
 	}
 }

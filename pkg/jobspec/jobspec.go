@@ -163,7 +163,30 @@ func (j Jobspec) counts() (nodes, coresPerNode, gpusPerNode, memPerNode int) {
 	return
 }
 
-func (j Jobspec) Nodes() int        { n, _, _, _ := j.counts(); return n }
+func (j Jobspec) Nodes() int { n, _, _, _ := j.counts(); return n }
+
+// Exclusive reports whether the job wants WHOLE nodes. True when a node resource
+// is marked exclusive, and also when no cores are requested at all: a node-level
+// request with no per-core detail means "give me these nodes", not "give me one
+// core on each of them".
+func (j Jobspec) Exclusive() bool {
+	var walk func(rs []Resource) bool
+	walk = func(rs []Resource) bool {
+		for _, r := range rs {
+			if r.Type == "node" && r.Exclusive {
+				return true
+			}
+			if walk(r.With) {
+				return true
+			}
+		}
+		return false
+	}
+	if walk(j.Resources) {
+		return true
+	}
+	return j.CoresPerNode() < 1
+}
 func (j Jobspec) CoresPerNode() int { _, c, _, _ := j.counts(); return c }
 func (j Jobspec) GPUsPerNode() int  { _, _, g, _ := j.counts(); return g }
 func (j Jobspec) MemGBPerNode() int { _, _, _, m := j.counts(); return m }

@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -171,33 +170,29 @@ func (s *Server) unregisterCluster(w http.ResponseWriter, r *http.Request) {
 // ---- reads ----
 
 type ClusterInfo struct {
-	Name       string   `json:"name"`
-	Manager    string   `json:"manager"`
-	Dispatch   string   `json:"dispatch"` // emulated | real | not-implemented
-	Handle     string   `json:"handle,omitempty"`
-	Nodes      int      `json:"nodes"`
-	Subsystems []string `json:"subsystems,omitempty"`
-	// Capability property keys on the cluster (software + network, e.g. lammps,
-	// efa) — what a selector matches a container against. Matched by requires.
-	Capabilities []string `json:"capabilities,omitempty"`
+	Name     string `json:"name"`
+	Manager  string `json:"manager"`
+	Dispatch string `json:"dispatch"` // emulated | real | not-implemented
+	Handle   string `json:"handle,omitempty"`
+	Nodes    int    `json:"nodes"`
+	// Subsystems maps each registered subsystem to the values it advertises,
+	// read from the graphs the matcher actually traverses (e.g.
+	// {"architecture": ["arm64"], "network": ["efa"]}). A `requires` section
+	// matches these by type. There is no separate capability list: a parallel
+	// flat set could drift from the graphs and match nothing.
+	Subsystems map[string][]string `json:"subsystems,omitempty"`
 }
 
 func infoOf(cg graph.ClusterGraph) ClusterInfo {
-	var subs []string
-	for name := range cg.Subsystems {
-		subs = append(subs, name)
+	subs := map[string][]string{}
+	for name, g := range cg.Subsystems {
+		subs[name] = vocabulary.Values(g)
 	}
-	sort.Strings(subs)
 	nodes := 0
 	if g := cg.Containment(); g != nil {
 		nodes = len(g.VerticesOfTypeExported("node"))
 	}
-	var caps []string
-	for k := range cg.Capabilities() {
-		caps = append(caps, k)
-	}
-	sort.Strings(caps)
-	return ClusterInfo{Name: cg.ID, Manager: string(cg.Manager), Handle: cg.Handle, Nodes: nodes, Subsystems: subs, Capabilities: caps}
+	return ClusterInfo{Name: cg.ID, Manager: string(cg.Manager), Handle: cg.Handle, Nodes: nodes, Subsystems: subs}
 }
 
 // ManagerInfo reports a manager type and whether this server can dispatch to it

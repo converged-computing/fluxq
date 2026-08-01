@@ -48,6 +48,15 @@ type Discoverer interface {
 	Discover(target graph.ClusterGraph) ([]NodeFacts, error)
 }
 
+// MultiTypeDriver is an OPTIONAL capability: a driver that serves more than one
+// manager type. The Kubernetes driver applies any manifest kind generically
+// (discovery RESTMapper + dynamic client), so one driver covers both a batch/v1
+// Job (k8s-job) and a Flux Operator MiniCluster (flux-operator) — the difference
+// is what the transform emits, not how it is dispatched.
+type MultiTypeDriver interface {
+	Types() []graph.ManagerType
+}
+
 // Registry resolves a driver by manager type.
 type Registry struct {
 	drivers map[graph.ManagerType]Driver
@@ -56,6 +65,12 @@ type Registry struct {
 func NewRegistry(ds ...Driver) *Registry {
 	r := &Registry{drivers: map[graph.ManagerType]Driver{}}
 	for _, d := range ds {
+		if mt, ok := d.(MultiTypeDriver); ok {
+			for _, t := range mt.Types() {
+				r.drivers[t] = d
+			}
+			continue
+		}
 		r.drivers[d.Type()] = d
 	}
 	return r

@@ -337,11 +337,18 @@ func (m *Manager) DiscoverCluster(clusterID string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Containment FIRST: it is the consuming graph Fluxion's traverser needs
+	// before any descriptive subsystem can attach (and what makes the cluster
+	// non-empty / schedulable).
+	cont := cluster.ContainmentFromFacts(clusterID, cg.Manager, cg.Handle, facts)
+	if err := m.RegisterSubsystem(clusterID, graph.ContainmentSubsystem, cont, false); err != nil {
+		return nil, fmt.Errorf("register containment: %w", err)
+	}
 	subs, _, err := cluster.SubsystemsFromFacts(facts)
 	if err != nil {
 		return nil, err
 	}
-	var names []string
+	names := []string{graph.ContainmentSubsystem}
 	for name, g := range subs {
 		if err := m.RegisterSubsystem(clusterID, name, g, true); err != nil {
 			return names, err

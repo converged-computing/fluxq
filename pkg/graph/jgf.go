@@ -128,22 +128,29 @@ func (g *JGF) JSON() (string, error) {
 	return string(b), nil
 }
 
-// SingletonSubsystem builds a one-vertex descriptive subsystem graph whose
-// vertex TYPE is the discovered value (e.g. subsystem "architecture" with type
-// "arm64"). A requires section matches it by type: requires["architecture"] =
-// [{type:"arm64"}]. This is what --discover emits per vocabulary category.
+// SingletonSubsystem builds a one-value descriptive subsystem graph: a cluster
+// root with a single typed child (e.g. subsystem "architecture" with a vertex of
+// type "arm64"). A requires section matches it by type:
+// requires["architecture"] = [{type:"arm64"}].
+//
+// Shape matters to Fluxion: the graph needs a `cluster` ROOT and a `contains`
+// EDGE to the value vertex, and every vertex's paths are keyed by
+// ContainmentSubsystem (not the subsystem name) — the same layout the
+// hand-written subsystem JGFs in data/quickstart use. An orphan vertex with no
+// root or edge makes the traverser fail to initialize.
 func SingletonSubsystem(subsystem, valueType string) *JGF {
-	return &JGF{Graph: JGFGraph{
-		Nodes: []Vertex{{
-			ID: "1",
-			Metadata: VertexMeta{
-				Type:     valueType,
-				Basename: valueType,
-				Name:     valueType,
-				UniqID:   1,
-				Size:     1,
-				Paths:    map[string]string{subsystem: "/" + valueType},
-			},
-		}},
-	}}
+	// Every vertex's containment path must END IN ITS OWN NAME. Fluxion builds
+	// the graph from `paths`, and the subsystem graphs it is known to accept
+	// (data/quickstart, conformance_fluxion_test.go) all satisfy this. A path
+	// whose last component differs from the vertex name loads without error but
+	// never matches, so every `requires` naming it becomes infeasible.
+	b := &jgfBuilder{g: &JGF{}}
+	rootName := subsystem
+	leafName := valueType + "0"
+	rootPath := "/" + rootName
+	root := b.add(Vertex{Metadata: meta("cluster", "cluster", rootName, 0, rootPath)})
+	leaf := b.add(Vertex{Metadata: meta(valueType, valueType, leafName, 0,
+		rootPath+"/"+leafName)})
+	b.edge(root, leaf)
+	return b.g
 }

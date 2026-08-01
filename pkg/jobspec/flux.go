@@ -14,6 +14,10 @@ import (
 // The user still authors a real Flux jobspec; command/attributes pass through,
 // and `requires` is dropped (subsystems match against their own graphs).
 func (j Jobspec) ToFluxSpec() (string, error) {
+	// A whole-node request asks at the NODE level: mark the node exclusive so
+	// Fluxion allocates all of it. The inner core count is then a formality (a
+	// slot must contain something), NOT a claim that the job wants one core.
+	exclusive := j.Exclusive()
 	cores := j.CoresPerNode()
 	if cores < 1 {
 		cores = 1
@@ -26,7 +30,7 @@ func (j Jobspec) ToFluxSpec() (string, error) {
 		inner = append(inner, Resource{Type: "memory", Count: mem, Unit: "GB"})
 	}
 	slot := Resource{Type: "slot", Count: 1, Label: "default", With: inner}
-	node := Resource{Type: "node", Count: j.Nodes(), With: []Resource{slot}}
+	node := Resource{Type: "node", Count: j.Nodes(), Exclusive: exclusive, With: []Resource{slot}}
 	cmd := j.Command()
 	if len(cmd) == 0 {
 		cmd = []string{"true"}
@@ -85,7 +89,11 @@ func SubsystemFluxSpec(section []Resource) (string, error) {
 	if len(section) == 0 {
 		return "", fmt.Errorf("empty subsystem section")
 	}
-	slot := Resource{Type: "slot", Count: 1, Label: "satisfy", With: section}
+	// A `requires` entry names a capability, so it usually carries no count.
+	// Fluxion reads count literally, and a request for ZERO of a type never
+	// matches — the section must ask for at least one of each. (The dev-double
+	// matcher ignores counts, so this only shows up against real Fluxion.)
+	slot := Resource{Type: "slot", Count: 1, Label: "satisfy", With: atLeastOne(section)}
 	doc := fluxDoc{
 		Version:    1,
 		Resources:  []Resource{slot},
@@ -127,4 +135,20 @@ type fluxDoc struct {
 	Resources  []Resource     `json:"resources"`
 	Tasks      []Task         `json:"tasks"`
 	Attributes map[string]any `json:"attributes"`
+}
+
+// atLeastOne returns the section with every unset/zero count raised to 1,
+// recursively. It does not mutate the caller's resources.
+func atLeastOne(section []Resource) []Resource {
+	out := make([]Resource, len(section))
+	for i, r := range section {
+		if r.Count < 1 {
+			r.Count = 1
+		}
+		if len(r.With) > 0 {
+			r.With = atLeastOne(r.With)
+		}
+		out[i] = r
+	}
+	return out
 }

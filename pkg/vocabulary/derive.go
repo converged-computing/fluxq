@@ -2,13 +2,11 @@ package vocabulary
 
 import (
 	"sort"
-	"strconv"
 
 	"github.com/converged-computing/fluxq/pkg/graph"
 )
 
 // MemoryBuckets is how many contiguous memory ranges the vocabulary aims for.
-const MemoryBuckets = 3
 
 // Dimension is one queryable axis the agent may classify a container along.
 type Dimension struct {
@@ -23,19 +21,39 @@ type Vocabulary struct {
 	Dimensions []Dimension `json:"dimensions"`
 }
 
-// distinctTypes returns the sorted distinct vertex types of a named subsystem
-// across all clusters (the values that subsystem advertises fleet-wide).
+// Values returns the sorted distinct vertex types a single subsystem graph
+// advertises — the values a `requires` section can match against. The graph's
+// cluster ROOT is skipped: it is structure Fluxion needs, not a value.
+//
+// This is the ONE place subsystem contents are read, so what /v1/clusters
+// displays and what /v1/vocabulary derives can never disagree with what the
+// matcher traverses.
+func Values(g *graph.JGF) []string {
+	if g == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	for i := range g.Graph.Nodes {
+		t := g.Graph.Nodes[i].Metadata.Type
+		if t == "" || t == "cluster" {
+			continue
+		}
+		seen[t] = true
+	}
+	out := make([]string, 0, len(seen))
+	for t := range seen {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// distinctTypes unions a named subsystem's values across the whole fleet.
 func distinctTypes(clusters []graph.ClusterGraph, sub string) []string {
 	seen := map[string]bool{}
 	for _, cg := range clusters {
-		g := cg.Subsystems[sub]
-		if g == nil {
-			continue
-		}
-		for i := range g.Graph.Nodes {
-			if t := g.Graph.Nodes[i].Metadata.Type; t != "" {
-				seen[t] = true
-			}
+		for _, v := range Values(cg.Subsystems[sub]) {
+			seen[v] = true
 		}
 	}
 	out := make([]string, 0, len(seen))
@@ -64,15 +82,11 @@ func Derive(clusters []graph.ClusterGraph) Vocabulary {
 	if v := distinctTypes(clusters, "gpu"); len(v) > 1 {
 		dims = append(dims, Dimension{"gpu", "subsystem", v})
 	}
-	// memory: contiguous quantile ranges over the raw per-cluster node sizes.
-	var gb []int
-	for _, raw := range distinctTypes(clusters, "memory-gb") {
-		if n, err := strconv.Atoi(raw); err == nil {
-			gb = append(gb, n)
-		}
-	}
-	if ranges := MemoryRanges(gb, MemoryBuckets); len(ranges) > 0 {
-		dims = append(dims, Dimension{"memory", "subsystem", ranges})
+	// memory: the standard buckets clusters advertise. Reported like any other
+	// dimension — NOT recomputed from raw node sizes, which would produce range
+	// strings no cluster actually advertises.
+	if v := distinctTypes(clusters, "memory"); len(v) > 0 {
+		dims = append(dims, Dimension{"memory", "subsystem", v})
 	}
 	return Vocabulary{Dimensions: dims}
 }
