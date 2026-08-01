@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/converged-computing/fluxq/pkg/api"
@@ -188,7 +189,15 @@ func clusterList(args []string) error {
 	}
 	fmt.Printf("%-16s %-14s %-16s %-6s %s\n", "NAME", "MANAGER", "DISPATCH", "NODES", "SUBSYSTEMS")
 	for _, c := range infos {
-		subs := strings.Join(c.Subsystems, ",")
+		var parts []string
+		for _, name := range sortedKeys(c.Subsystems) {
+			if vals := c.Subsystems[name]; len(vals) > 0 {
+				parts = append(parts, name+"="+strings.Join(vals, "|"))
+			} else {
+				parts = append(parts, name)
+			}
+		}
+		subs := strings.Join(parts, " ")
 		if subs == "" {
 			subs = "-"
 		}
@@ -294,7 +303,25 @@ func jobFromFile(fs *flag.FlagSet, args []string) (string, json.RawMessage, erro
 		return *server, nil, fmt.Errorf("a --file jobspec.json is required")
 	}
 	raw, err := os.ReadFile(*file)
-	return *server, json.RawMessage(raw), err
+	if err != nil {
+		return *server, nil, err
+	}
+	return *server, unwrapJobspec(raw), nil
+}
+
+// unwrapJobspec accepts either a bare jobspec or the authoring envelope the
+// selector writes ({"jobspec": {...}, "provenance": {...}}), so
+// `fluxq satisfy --file jobspecs/<app>/jobspec.json` works directly on
+// fluxq-select output with no extraction step.
+func unwrapJobspec(raw []byte) json.RawMessage {
+	var env struct {
+		Jobspec json.RawMessage `json:"jobspec"`
+	}
+	if err := json.Unmarshal(raw, &env); err == nil && len(env.Jobspec) > 0 &&
+		string(env.Jobspec) != "null" {
+		return env.Jobspec
+	}
+	return json.RawMessage(raw)
 }
 
 func runSubmit(args []string) error {
@@ -406,4 +433,14 @@ func runLog(args []string) error {
 	}
 	fmt.Print(string(out))
 	return nil
+}
+
+// sortedKeys gives a stable display order for the subsystem map.
+func sortedKeys(m map[string][]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

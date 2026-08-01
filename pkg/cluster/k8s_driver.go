@@ -53,6 +53,7 @@ type K8sDriver struct {
 }
 
 var _ Discoverer = (*K8sDriver)(nil)
+var _ MultiTypeDriver = (*K8sDriver)(nil)
 
 func NewK8sDriver() *K8sDriver {
 	d := &K8sDriver{Timeout: 30 * time.Second}
@@ -61,6 +62,14 @@ func NewK8sDriver() *K8sDriver {
 }
 
 func (d *K8sDriver) Type() graph.ManagerType { return graph.K8sJob }
+
+// Types reports every manager this driver serves. Dispatch is manifest-kind
+// agnostic, so the same driver handles Flux Operator MiniClusters; without this
+// a flux-operator cluster has no real driver and multi-node MPI is impossible
+// (a batch/v1 Job is a single pod).
+func (d *K8sDriver) Types() []graph.ManagerType {
+	return []graph.ManagerType{graph.K8sJob, graph.FluxOperator}
+}
 
 func (d *K8sDriver) timeout() time.Duration {
 	if d.Timeout <= 0 {
@@ -370,6 +379,14 @@ func factsFromNode(n corev1.Node) NodeFacts {
 	}
 	if mem, ok := n.Status.Allocatable[corev1.ResourceMemory]; ok {
 		f.MemoryGB = int(mem.Value() / (1 << 30))
+	}
+	if cpu, ok := n.Status.Allocatable[corev1.ResourceCPU]; ok {
+		f.Cores = int(cpu.Value())
+	}
+	for _, r := range []corev1.ResourceName{"nvidia.com/gpu", "amd.com/gpu"} {
+		if q, ok := n.Status.Allocatable[r]; ok && q.Value() > 0 {
+			f.GPUs = int(q.Value())
+		}
 	}
 	return f
 }

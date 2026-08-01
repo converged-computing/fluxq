@@ -10,9 +10,9 @@ package cluster
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/converged-computing/fluxq/pkg/graph"
+	"github.com/converged-computing/fluxq/pkg/vocabulary"
 )
 
 // NodeFacts are grounded, absolute facts read off one node, in backend-neutral
@@ -23,6 +23,8 @@ type NodeFacts struct {
 	GPUVendor string // nvidia | amd | "" (none)
 	Network   string // efa | ethernet | "" (unknown)
 	MemoryGB  int    // allocatable memory, GiB (captured for vocabulary bucketing)
+	Cores     int    // allocatable cpu, whole cores
+	GPUs      int    // allocatable gpu count on this node
 }
 
 // SubsystemsFromFacts aggregates node facts into descriptive subsystem graphs,
@@ -60,11 +62,41 @@ func SubsystemsFromFacts(nodes []NodeFacts) (map[string]*graph.JGF, []int, error
 			minMem = n.MemoryGB
 		}
 	}
-	// Record raw memory as an INTERNAL subsystem the vocabulary reads to compute
-	// fleet-relative ranges. The agent never matches memory-gb directly; it
-	// matches the derived `memory` range dimension.
+	// Memory is advertised as the standard BUCKET the cluster's smallest node
+	// falls into — the same absolute buckets a jobspec requires. The raw size is
+	// not registered as a subsystem: it is not a value anything matches on, and
+	// a second memory dimension could only drift from this one.
 	if minMem > 0 {
-		subsystems["memory-gb"] = graph.SingletonSubsystem("memory-gb", strconv.Itoa(minMem))
+		if b := vocabulary.StandardRangeFor(minMem); b != "" {
+			subsystems["memory"] = graph.SingletonSubsystem("memory", b)
+		}
 	}
 	return subsystems, memoryGB, nil
+}
+
+// ContainmentFromFacts builds the CONSUMING graph (cluster -> nodes -> cores/gpus)
+// from discovered nodes. Fluxion needs this base graph before any descriptive
+// subsystem can be attached — without it the traverser cannot initialize and the
+// cluster reports 0 nodes. Identical nodes are collapsed into one NodeSpec group.
+func ContainmentFromFacts(clusterID string, m graph.ManagerType, handle string,
+	nodes []NodeFacts) *graph.JGF {
+	type key struct{ cores, gpus, mem int }
+	order := []key{}
+	count := map[key]int{}
+	for _, n := range nodes {
+		k := key{n.Cores, n.GPUs, n.MemoryGB}
+		if _, seen := count[k]; !seen {
+			order = append(order, k)
+		}
+		count[k]++
+	}
+	groups := make([]graph.NodeSpec, 0, len(order))
+	for _, k := range order {
+		groups = append(groups, graph.NodeSpec{
+			Count: count[k], Cores: k.cores, GPUs: k.gpus, MemGB: k.mem,
+		})
+	}
+	// No capability properties: the descriptive subsystems are the single source
+	// of truth for what a cluster advertises (see vocabulary.Values).
+	return graph.BuildContainment(clusterID, m, handle, groups, nil)
 }
