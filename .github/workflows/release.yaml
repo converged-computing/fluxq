@@ -1,0 +1,43 @@
+name: Release container
+
+# Publishes the fluxq image (real Fluxion matcher) on merge to main.
+# Dev images for experiments can be built and pushed by hand from a branch.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/converged-computing/fluxq
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: verify the published image has the real matcher
+        run: |
+          docker run --rm --entrypoint sh "${{ env.IMAGE }}:${{ github.sha }}" -c \
+            'fluxq serve --queue memory --addr :8099 & sleep 4; kill %1' 2>&1 | tee out.txt
+          grep -qi "DEV DOUBLE" out.txt && { echo "ERROR: image built WITHOUT -tags fluxion"; exit 1; }
+          echo "ok: real Fluxion matcher"
