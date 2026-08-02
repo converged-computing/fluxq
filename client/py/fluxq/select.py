@@ -22,7 +22,33 @@ from behalf import AgentRunner, ConfirmFn, Task, ToolSpec
 
 from .io import load_manifests, load_vocabulary
 from .jobspec import SelectedJob, build_jobspec
-from .requires import gpu_vendor, is_gpu, launcher_in, section, validate
+from .requires import (
+    gpu_vendor,
+    is_gpu,
+    launcher_in,
+    memory_at_least,
+    section,
+    validate,
+)
+
+
+def container_facts(variant: dict) -> dict:
+    """Facts about the chosen image that the transform needs but cannot infer.
+
+    The libc is the one that matters: a flux view links against the container's
+    libc, so mounting a newer view aborts before flux starts. Recorded here
+    because only the manifest knows it.
+    """
+    platform = variant.get("platform") or {}
+    facts = {"arch": variant.get("arch", "")}
+    for key in ("libc_flavor", "libc_version", "os_id", "os_version_id",
+                "os_codename"):
+        if platform.get(key):
+            facts[key] = platform[key]
+    mpi = (variant.get("capability") or {}).get("mpi")
+    if mpi:
+        facts["mpi"] = mpi
+    return {k: v for k, v in facts.items() if v}
 
 SELECT = """You turn each profiled application into ONE fluxq jobspec, choosing the
 best container and reconciling the manifest against the standard vocabulary.
@@ -159,7 +185,9 @@ class SelectorTask(Task):
                             f"{vocab.get('memory', [])}"
                         }
                     )
-                requires["memory"] = [{"type": mem}]
+                # A lower bound, not an exact bucket: a larger node also fits.
+                if sec := memory_at_least(mem, vocab.get("memory", [])):
+                    requires["memory"] = sec
 
             js = build_jobspec(
                 name=app.lower(),
@@ -169,6 +197,7 @@ class SelectorTask(Task):
                 needs_gpu=needs_gpu,
                 duration_s=a.get("duration_s", manifest.get("duration_s", 3600)),
                 requires=requires or None,
+                container=container_facts(variants[ref]),
             )
             sink.append(
                 SelectedJob(

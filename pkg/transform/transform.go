@@ -14,6 +14,7 @@ package transform
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/converged-computing/fluxq/pkg/cluster"
@@ -105,12 +106,18 @@ spec:
 }
 
 func miniCluster(js jobspec.Jobspec, target graph.ClusterGraph) (string, error) {
-	// launcher: true so the operator does NOT wrap the command in its own flux
-	// submit. flux-secretary owns submission: it runs inside the allocation,
-	// reads what Flux actually has, and sizes the launch accordingly. Nothing out
-	// here can know that. tasks: 0 keeps the operator from adding an -n of its
-	// own, which produced "alloc denied due to type=unsatisfiable".
+	// launcher and tasks: 0 stop the operator adding its own flux submit and -n;
+	// the secretary sizes the launch from inside the allocation. launcher is a
+	// container field, and at spec level it is silently pruned.
 	devices, err := deviceResources(js, target)
+	if err != nil {
+		return "", err
+	}
+	view, err := secretaryView(js, target, isArm(target))
+	if err != nil {
+		return "", err
+	}
+	flux, err := fluxBlock(js, target)
 	if err != nil {
 		return "", err
 	}
@@ -121,29 +128,17 @@ metadata:
 spec:
   size: %d
   tasks: 0
-  launcher: true
-%s%s  containers:
+%s  containers:
     - image: %s
+      launcher: true
       command: %q
-      commands:
-        pre: %s
-%s%s`, js.Name(), js.Nodes(), fluxBlock(target), secretaryVolume(target, "  "),
-		js.Image(), secretaryCommand(js), secretaryInstall,
-		devices, secretaryVolume(target, "      ")), nil
+%s%s%s`, objectName(js), js.Nodes(), flux, js.Image(),
+		secretaryCommand(js, target), preBlock(append(secretaryInstall(target, view), fluxResources(target)...)...), devices,
+		secretaryVolume(target)), nil
 }
 
-// deviceResources writes the container resource limits for hardware the job
-// requires.
-//
-// A Kubernetes pod only ever receives a device it explicitly requests: a GPU pod
-// with no nvidia.com/gpu limit starts with no visible device, and an EFA pod with
-// no vpc.amazonaws.com/efa limit gets no interface and its MPI quietly falls back
-// to TCP. Both failures are silent, which is worse than a crash, because the job
-// still produces numbers.
-//
-// So this returns an ERROR rather than omitting a device the job asked for. A
-// scheduler that places work on hardware the job never receives is not measuring
-// anything.
+// deviceResources renders container resource limits for the GPU or fabric the
+// job requires, and errors if the cluster cannot provide one.
 func deviceResources(js jobspec.Jobspec, target graph.ClusterGraph) (string, error) {
 	limits := []string{}
 
@@ -170,13 +165,12 @@ func deviceResources(js jobspec.Jobspec, target graph.ClusterGraph) (string, err
 		limits = append(limits, fmt.Sprintf("%s.com/gpu: %d", vendor, count))
 	}
 
-	// EFA is requested only when the job asked for it, and it must be present:
-	// a job matched on network=efa that runs over TCP measures the wrong thing.
-	if requiresValue(js, "network", "efa") {
-		if !target.SubsystemHas("network", "efa") {
-			return "", fmt.Errorf("job requires efa but cluster %q does not advertise it",
-				target.ID)
-		}
+	// Whether this cluster satisfies the job's requires is Fluxion's answer, and
+	// it has already given it: re-deciding here means a second matcher that can
+	// disagree with the first, and the transform would win by refusing a job the
+	// scheduler accepted. So ask only what the CLUSTER has. The node is held
+	// exclusively, so its fabric is claimed when it exists.
+	if target.SubsystemHas("network", "efa") {
 		limits = append(limits, "vpc.amazonaws.com/efa: 1")
 	}
 
@@ -190,58 +184,238 @@ func deviceResources(js jobspec.Jobspec, target graph.ClusterGraph) (string, err
 	return out, nil
 }
 
-// requiresValue reports whether a requires section names a value, including
-// inside an anyof.
-func requiresValue(js jobspec.Jobspec, sub, value string) bool {
-	var walk func(rs []jobspec.Resource) bool
-	walk = func(rs []jobspec.Resource) bool {
-		for _, r := range rs {
-			if r.Type == value || walk(r.With) {
-				return true
-			}
-		}
-		return false
+// secretaryInstall renders the pip install run before the job, or "" when the
+// cluster asks for none.
+// secretaryInstall renders the commands that put flux-secretary in the view, or
+// nothing when the cluster asks for none.
+//
+// ensurepip comes first: the view has an interpreter but no pip, so the install
+// fails with "No module named pip" and the job then dies with "flux-secretary: not
+// found", which reads as a launch problem and is not one.
+func secretaryInstall(target graph.ClusterGraph, view string) []string {
+	pkg := target.Cfg("secretary_package")
+	if pkg == "" {
+		pkg = secretaryPackage
 	}
-	return walk(js.Requires[sub])
+	if pkg == "none" {
+		return nil
+	}
+	py := secretaryPythonFor(target, view)
+	return []string{
+		py + " -m ensurepip",
+		py + " -m pip install --no-cache-dir " + pkg,
+	}
 }
 
-// The secretary is installed with the interpreter Flux ships its bindings for.
-// The bindings are compiled, so the container's own python3 may import the
-// package but not flux.
-const secretaryInstall = "flux python -m pip install --user --quiet flux-secretary"
-
-// secretaryCommand wraps the workload. The command is passed through untouched
-// after the separator: the secretary chooses how to launch it, never what to run.
-func secretaryCommand(js jobspec.Jobspec) string {
-	return fmt.Sprintf("flux python -m fluxsecretary.cli run --nodes %d -- %s",
-		js.Nodes(), strings.Join(js.Command(), " "))
+// secretaryPythonFor is the interpreter that installs flux-secretary: an absolute
+// path under the mounted view, matched to the view that was chosen.
+//
+// Each view ships one python3.N and no python3, and the version is a property of
+// that view, so it is looked up rather than discovered in the pod. Set
+// secretary_python on the cluster for a view that is not in the table.
+func secretaryPythonFor(target graph.ClusterGraph, view string) string {
+	if py := target.Cfg("secretary_python"); py != "" {
+		return py
+	}
+	mount := target.Cfg("view_mount")
+	if mount == "" {
+		mount = defaultViewMount
+	}
+	root := strings.TrimRight(mount, "/") + "/view/bin/"
+	for _, v := range secretaryViews {
+		if v.image == view {
+			return root + v.python
+		}
+	}
+	return root + secretaryPython
 }
 
-// secretaryVolume renders the agent token volume, when the cluster was
-// registered with one. It is emitted TWICE: at the spec level to declare the
-// volume, and under the container to mount it. Without a token the secretary
-// falls back to its deterministic ladder, so a fleet with no token still runs.
-// The CRD takes environment as plain key/value with no secretKeyRef, so a
-// mounted secret is how a token gets in.
-func secretaryVolume(target graph.ClusterGraph, indent string) string {
+// secretaryCommand wraps the workload in flux-secretary, passing the command
+// through unchanged after the separator.
+func secretaryCommand(js jobspec.Jobspec, target graph.ClusterGraph) string {
+	model := target.Cfg("secretary_model")
+	if model == "" {
+		model = secretaryModel
+	}
+	flags := ""
+	attempts := secretaryAttempts
+	if v := target.Cfg("secretary_attempts"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			attempts = n
+		}
+	}
+	flags = fmt.Sprintf(" --attempts %d", attempts)
+	if model != "none" {
+		flags += " --model " + model
+	}
+	return fmt.Sprintf("%s run --nodes %d%s -- %s",
+		secretaryEntrypoint, js.Nodes(), flags, strings.Join(js.Command(), " "))
+}
+
+// secretaryVolume renders the agent token volume, or "" when the cluster has no
+// token configured.
+func secretaryVolume(target graph.ClusterGraph) string {
 	name := target.Cfg("secretary_secret")
 	if name == "" {
 		return ""
 	}
-	return fmt.Sprintf(`%svolumes:
-%s  secretary-token:
-%s    path: /etc/flux-secretary
-%s    secretName: %s
-`, indent, indent, indent, indent, name)
+	// Container level only: v1alpha2 has no spec.volumes and prunes it silently.
+	return fmt.Sprintf(`      volumes:
+        secretary-token:
+          path: /etc/flux-secretary
+          secretName: %s
+`, name)
 }
 
-// fluxBlock adds MiniCluster-level flux settings derived from the target. An
-// arm64 cluster needs the arm flux view, or the operator installs x86 binaries.
-func fluxBlock(target graph.ClusterGraph) string {
-	if isArm(target) {
-		return "  flux:\n    arch: \"arm\"\n"
+// fluxBlock renders spec.flux: the view image and, on arm targets, the arch.
+func fluxBlock(js jobspec.Jobspec, target graph.ClusterGraph) (string, error) {
+	var b strings.Builder
+	arm := isArm(target)
+	view, err := secretaryView(js, target, arm)
+	if err != nil {
+		return "", err
+	}
+	if !arm && view == "" {
+		return "", nil
+	}
+	b.WriteString("  flux:\n")
+	if arm {
+		// Without this the operator installs x86 view binaries on an arm cluster.
+		b.WriteString("    arch: \"arm\"\n")
+	}
+	if view != "" {
+		b.WriteString("    container:\n")
+		b.WriteString(fmt.Sprintf("      image: %s\n", view))
+		// Republished under the same tag, so a node holding an older layer would
+		// run a different interpreter than the one pre names.
+		b.WriteString("      pullAlways: true\n")
+	}
+	return b.String(), nil
+}
+
+const secretaryPackage = "flux-secretary[all]"
+
+// secretaryModel is the Bedrock model the agent uses. behalf's default is denied
+// by some service control policies.
+const secretaryModel = "us.anthropic.claude-opus-5"
+
+// Launch attempts the agent may make. Stated rather than left to the secretary's
+// default, so the manifest records what the run allowed.
+const secretaryAttempts = 10
+
+// The python that installs flux-secretary: the view's, or any python3 on PATH.
+//
+// Located under ${viewroot}, which the operator substitutes, rather than by
+// asking PATH where flux is: PATH puts the view last, so an application image's
+// own flux wins and the derivation lands in the wrong directory. The version is
+// found rather than pinned, and the regex is anchored so python3.N-config and
+// python3.N-gdb.py do not match.
+const secretaryPython = "python3.11"
+
+// What the container runs. pip puts this console script in the view's bin, which
+// the operator has on PATH, and the name is unique to flux-secretary so no
+// application image can shadow it. No interpreter, no substitution.
+const secretaryEntrypoint = "flux-secretary"
+
+// Where the operator mounts the view: spec.flux.container.mountPath, default
+// /mnt/flux. The broker reads <mount>/config/etc/flux/system/R.
+const defaultViewMount = "/mnt/flux"
+
+// secretaryViews are the stock flux views, keyed by the glibc they were built
+// against.
+var secretaryViews = []struct {
+	image  string
+	glibc  string
+	python string // the interpreter under <mount>/view/bin that installs the secretary
+	arm    bool
+}{
+	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-noble", "2.39", "python3.13", false},
+	//	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-jammy", "2.35", "python3.11", false},
+	{"ghcr.io/converged-computing/flux-view-ubuntu:jammy", "2.35", "python3.14", false},
+	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-focal", "2.31", "python3.11", false},
+	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-noble", "2.39", "python3.13", true},
+	//	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-jammy", "2.35", "python3.11", true},
+	{"ghcr.io/converged-computing/flux-view-ubuntu:jammy", "2.35", "python3.14", true},
+	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-focal", "2.31", "python3.11", true},
+}
+
+// The glibc assumed when an image's own is not recorded. Jammy: it loads in
+// anything newer, and it is what the corpus was built against.
+const defaultViewGlibc = "2.35"
+
+// secretaryView is the newest flux view whose glibc the job's image can host.
+// A view links against the container's libc, so a newer one will not load.
+func secretaryView(js jobspec.Jobspec, target graph.ClusterGraph, arm bool) (string, error) {
+	switch v := target.Cfg("secretary_view"); v {
+	case "none":
+		return "", nil
+	case "":
+	default:
+		return v, nil
+	}
+
+	// The newest view whose glibc the image can host: a view links against the
+	// container's libc, so an older one loads and a newer one aborts before flux
+	// starts. An image with no recorded glibc is assumed to be jammy.
+	have := containerGlibc(js)
+	if have == "" {
+		have = defaultViewGlibc
+	}
+	var best struct{ image, glibc string }
+	for _, v := range secretaryViews {
+		if v.arm != arm {
+			continue
+		}
+		if compareVersions(v.glibc, have) > 0 {
+			continue
+		}
+		if best.image == "" || compareVersions(v.glibc, best.glibc) > 0 {
+			best.image, best.glibc = v.image, v.glibc
+		}
+	}
+	if best.image == "" {
+		return "", fmt.Errorf("no flux view fits image glibc %s (arm=%v): a view links "+
+			"against the container's libc, so a newer one will not load", have, arm)
+	}
+	return best.image, nil
+}
+
+// containerGlibc is the image's glibc as recorded by artifact-secretary, or "".
+func containerGlibc(js jobspec.Jobspec) string {
+	if js.Attributes == nil || js.Attributes.User == nil {
+		return ""
+	}
+	c, ok := js.Attributes.User["container"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, k := range []string{"libc_version", "glibc"} {
+		if v, ok := c[k].(string); ok && v != "" {
+			return v
+		}
 	}
 	return ""
+}
+
+// compareVersions compares dotted numeric versions: -1, 0, or 1.
+func compareVersions(a, b string) int {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x != y {
+			if x < y {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
 }
 
 // isArm reports whether the target advertises an arm64 architecture.
@@ -295,4 +469,108 @@ func shQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// objectName is the native object name: the job name plus the job id, so two
+// runs of one jobspec do not collide.
+func objectName(js jobspec.Jobspec) string {
+	name := js.Name()
+	if name == "" {
+		name = "job"
+	}
+	if id := js.JobID(); id != "" {
+		name = name + "-" + id
+	}
+	return dnsSafe(name)
+}
+
+// dnsSafe reduces a name to what Kubernetes accepts for an object name.
+func dnsSafe(s string) string {
+	out := make([]rune, 0, len(s))
+	for _, r := range strings.ToLower(s) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			out = append(out, r)
+		case r == '-' || r == '.':
+			out = append(out, r)
+		default:
+			out = append(out, '-')
+		}
+	}
+	trimmed := strings.Trim(string(out), "-.")
+	if len(trimmed) > 253 {
+		trimmed = strings.Trim(trimmed[:253], "-.")
+	}
+	if trimmed == "" {
+		return "job"
+	}
+	return trimmed
+}
+
+// preBlock renders commands.pre, or "" when there is nothing to run.
+func preBlock(cmds ...string) string {
+	var keep []string
+	for _, c := range cmds {
+		if c != "" {
+			keep = append(keep, c)
+		}
+	}
+	if len(keep) == 0 {
+		return ""
+	}
+	// A literal block: several commands compose, and nothing inside needs
+	// quoting even when it holds a colon or a shell substitution.
+	var b strings.Builder
+	b.WriteString("      commands:\n        pre: |\n")
+	for _, c := range keep {
+		b.WriteString("          " + c + "\n")
+	}
+	return b.String()
+}
+
+// fluxResources makes the pod's GPUs visible to the broker.
+//
+// The core count is counted in the container, not taken from the node. Kubernetes
+// allocatable.cpu counts hardware threads, and a resource set counts what the
+// container can actually schedule on: declaring the node's 8 for a g5.2xlarge
+// drained rank 0 with "missing resources: core[4-7]", after which no allocation
+// could be satisfied and the job waited forever. sched_getaffinity respects the
+// cpuset, and one id must be a bare index because "0-0" produces no children.
+//
+// Only the device count comes from fluxq, because that is the one thing the
+// container cannot discover: flux's own detection does not see the GPU.
+func fluxResources(target graph.ClusterGraph) []string {
+	gpus := target.GPUsPerNode()
+	if gpus < 1 {
+		return nil
+	}
+	mount := target.Cfg("view_mount")
+	if mount == "" {
+		mount = defaultViewMount
+	}
+	path := strings.TrimRight(mount, "/") + "/config/etc/flux/system/R"
+	py := "python3"
+	if v := target.Cfg("view_python"); v != "" {
+		py = v
+	}
+	cores := fmt.Sprintf(
+		`$(%s -c "import os;n=len(os.sched_getaffinity(0));`+
+			`print('0-%%d'%%(n-1) if n>1 else '0')")`, py)
+	// No fallback: if this cannot be written the job must fail with it rather than
+	// start a broker that cannot see the device.
+	return []string{
+		fmt.Sprintf("flux R encode --hosts=${hosts} --cores=%s --gpus=%s > %s",
+			cores, idRange(gpus), path),
+		"echo resource set the broker will read:",
+		"cat " + path,
+	}
+}
+
+// idRange is how flux wants a count of ids: a bare index for one, a hyphenated
+// range for more. "0-0" is accepted and then produces no children at all.
+func idRange(n int) string {
+	if n <= 1 {
+		return "0"
+	}
+	return fmt.Sprintf("0-%d", n-1)
 }

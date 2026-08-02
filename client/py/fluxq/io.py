@@ -25,6 +25,9 @@ def load_manifests(manifests_dir: str) -> dict[str, list[dict]]:
         doc = read_json(os.path.join(dirpath, "manifest.json"))
         entry = doc.get("entry", doc)
         repro = entry.get("reproduce", {})
+        # The image's libc decides which flux view can be mounted into it, so it
+        # travels with the variant rather than staying in the manifest.
+        platform = entry.get("platform", {})
         ref = repro.get("reference", "")
         # Group by container REPO (metric-lammps-cpu), NOT the free-text
         # `application` field — that field is inconsistent across a repo's
@@ -41,6 +44,7 @@ def load_manifests(manifests_dir: str) -> dict[str, list[dict]]:
                     "capability": art.get("capability", {}),
                     "needed": art.get("needed", []),
                     "provenance": art.get("provenance", {}),
+                    "platform": platform,
                 }
             )
     return catalog

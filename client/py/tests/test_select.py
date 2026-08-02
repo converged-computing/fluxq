@@ -140,7 +140,12 @@ def test_end_to_end():
         assert req["architecture"] == [{"type": "amd64"}]
         assert req["gpu"] == [{"type": "nvidia"}]
         assert req["network"][0]["type"] == "anyof"
-        assert req["memory"] == [{"type": "64-256GB"}]
+        # a lower bound: the named bucket or any larger one
+        assert req["memory"][0]["type"] == "anyof", req["memory"]
+        assert [w["type"] for w in req["memory"][0]["with"]] == [
+            "64-256GB",
+            "256GB+",
+        ], req["memory"]
         assert "software" not in req
         print("OK reconciliation: facts stamped, judgment validated, app skipped")
 
@@ -167,9 +172,85 @@ def test_no_launcher_and_ranks_from_tasks_per_node():
     print("OK whole-node request; no core/rank guessing; gpu as presence")
 
 
+def test_container_facts_carry_the_libc():
+    """The transform cannot infer a container's libc, and the view choice needs it."""
+    from fluxq.select import container_facts
+
+    facts = container_facts(
+        {
+            "arch": "amd64",
+            "capability": {"mpi": "openmpi"},
+            "platform": {
+                "libc_flavor": "glibc",
+                "libc_version": "2.35",
+                "os_id": "ubuntu",
+                "os_codename": "jammy",
+            },
+        }
+    )
+    assert facts["libc_version"] == "2.35", facts
+    assert facts["os_codename"] == "jammy", facts
+    assert facts["arch"] == "amd64", facts
+
+    # a manifest profiled before the probe existed carries no platform, and the
+    # transform falls back to the most conservative view
+    assert container_facts({"arch": "arm64"}) == {"arch": "arm64"}
+    print("OK container facts include the libc")
+
+
+def test_vocabulary_loads_from_a_file():
+    """Authoring must not depend on a running fleet."""
+    import json
+    import tempfile
+
+    from fluxq.io import load_vocabulary
+
+    doc = {
+        "version": 1,
+        "dimensions": [
+            {"name": "architecture", "values": ["amd64", "arm64"]},
+            {"name": "memory", "values": ["0-16GB", "192GB+"]},
+        ],
+    }
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(doc, f)
+        path = f.name
+    v = load_vocabulary(path)
+    assert v == {"architecture": ["amd64", "arm64"], "memory": ["0-16GB", "192GB+"]}, v
+    print("OK vocabulary read from a file")
+
+
+def test_memory_is_a_lower_bound():
+    """A cluster advertises one bucket, so an exact match refuses a job that fits.
+
+    64-192GB against a fleet of 16-64GB and 192GB+ nodes matched nothing, while
+    both 256GB clusters could have run it.
+    """
+    from fluxq.requires import memory_at_least
+
+    V = ["0-16GB", "16-64GB", "64-192GB", "192GB+"]
+
+    sec = memory_at_least("64-192GB", V)
+    assert sec[0]["type"] == "anyof", sec
+    assert [w["type"] for w in sec[0]["with"]] == ["64-192GB", "192GB+"], sec
+
+    # the top bucket has nothing above it, so it stays a plain type
+    assert memory_at_least("192GB+", V) == [{"type": "192GB+"}], memory_at_least("192GB+", V)
+
+    # the lowest bucket accepts anything
+    assert len(memory_at_least("0-16GB", V)[0]["with"]) == 4
+
+    # a value outside the vocabulary is refused rather than guessed at
+    assert memory_at_least("7GB", V) is None
+    print("OK memory is a lower bound")
+
+
 if __name__ == "__main__":
     test_capability_facts()
     test_no_launcher_and_ranks_from_tasks_per_node()
     test_group_by_repo()
     test_end_to_end()
+    test_container_facts_carry_the_libc()
+    test_vocabulary_loads_from_a_file()
+    test_memory_is_a_lower_bound()
     print("\nall selector tests passed")

@@ -77,12 +77,8 @@ func (c ClusterGraph) Capabilities() map[string]bool {
 // Containment returns the consuming graph.
 func (c ClusterGraph) Containment() *JGF { return c.Subsystems[ContainmentSubsystem] }
 
-// Cfg returns a backend dispatch-config value (nil-safe).
-// CoresPerNode is the SMALLEST core count across the cluster's node vertices,
-// or 0 when containment does not say. A transform sizing a job to the cluster
-// must fit the smallest node, since any node may be allocated. This is the
-// level-2 fact a jobspec cannot carry: the selector chooses a node count without
-// knowing which cluster it will land on.
+// CoresPerNode is the smallest core count across the cluster's node vertices,
+// or 0 when containment does not say.
 func (c ClusterGraph) CoresPerNode() int {
 	g := c.Containment()
 	if g == nil {
@@ -117,11 +113,7 @@ func (c ClusterGraph) CoresPerNode() int {
 	return minCores
 }
 
-// GPUsPerNode is the smallest gpu count across the cluster's node vertices, or
-// 0 when there are none. A pod only receives a device it explicitly requests, so
-// the transform needs this number to write a resource limit. The jobspec cannot
-// carry it: the selector asked for a GPU without knowing which cluster it would
-// land on.
+// GPUsPerNode is the smallest gpu count across the cluster's node vertices.
 func (c ClusterGraph) GPUsPerNode() int {
 	g := c.Containment()
 	if g == nil {

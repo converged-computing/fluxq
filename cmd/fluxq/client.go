@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/converged-computing/fluxq/pkg/api"
+	"github.com/converged-computing/fluxq/pkg/graph"
 	"github.com/converged-computing/fluxq/pkg/queue"
 )
 
@@ -159,15 +160,26 @@ func clusterRegister(args []string) error {
 		return err
 	}
 	fmt.Printf("registered cluster %q (handle %s)\n", resp.Name, resp.Handle)
+	haveContainment := false
 	if len(resp.Discovered) > 0 {
 		fmt.Printf("discovered subsystems: %s\n", strings.Join(resp.Discovered, ", "))
+		for _, sub := range resp.Discovered {
+			if sub == string(graph.ContainmentSubsystem) {
+				haveContainment = true
+			}
+		}
 	}
 	if resp.DiscoverError != "" {
 		fmt.Printf("discover warning: %s\n", resp.DiscoverError)
 	}
 	fmt.Printf("secret: %s\n", resp.Secret)
 	fmt.Printf("save it for edits:  export FLUXQ_SECRET=%s\n", resp.Secret)
-	fmt.Println("note: the cluster is empty. Add a containment subsystem (JGF) before it can schedule.")
+	// Only when the cluster really has nothing to schedule against. Discovery
+	// registers containment itself, and saying otherwise sends people looking for
+	// a problem that is not there.
+	if !haveContainment {
+		fmt.Println("note: the cluster is empty. Add a containment subsystem (JGF) before it can schedule.")
+	}
 	return nil
 }
 

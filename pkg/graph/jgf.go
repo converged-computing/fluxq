@@ -129,21 +129,12 @@ func (g *JGF) JSON() (string, error) {
 }
 
 // SingletonSubsystem builds a one-value descriptive subsystem graph: a cluster
-// root with a single typed child (e.g. subsystem "architecture" with a vertex of
-// type "arm64"). A requires section matches it by type:
-// requires["architecture"] = [{type:"arm64"}].
-//
-// Shape matters to Fluxion: the graph needs a `cluster` ROOT and a `contains`
-// EDGE to the value vertex, and every vertex's paths are keyed by
-// ContainmentSubsystem (not the subsystem name) — the same layout the
-// hand-written subsystem JGFs in data/quickstart use. An orphan vertex with no
-// root or edge makes the traverser fail to initialize.
+// root with a single typed child, matched by requires[sub] = [{type: value}].
+// Every path must end in its own vertex name or Fluxion loads it without
+// matching it.
 func SingletonSubsystem(subsystem, valueType string) *JGF {
-	// Every vertex's containment path must END IN ITS OWN NAME. Fluxion builds
-	// the graph from `paths`, and the subsystem graphs it is known to accept
-	// (data/quickstart, conformance_fluxion_test.go) all satisfy this. A path
-	// whose last component differs from the vertex name loads without error but
-	// never matches, so every `requires` naming it becomes infeasible.
+	// Each path ends in its own vertex name: Fluxion builds the graph from paths,
+	// and a mismatch loads without error but never matches.
 	b := &jgfBuilder{g: &JGF{}}
 	rootName := subsystem
 	leafName := valueType + "0"

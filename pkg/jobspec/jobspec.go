@@ -163,12 +163,38 @@ func (j Jobspec) counts() (nodes, coresPerNode, gpusPerNode, memPerNode int) {
 	return
 }
 
+// WithJobID returns a copy carrying the control plane's job id, which the
+// transform uses to name the native object uniquely.
+func (j Jobspec) WithJobID(id string) Jobspec {
+	user := map[string]any{}
+	sys := map[string]any{}
+	if j.Attributes != nil {
+		for k, v := range j.Attributes.User {
+			user[k] = v
+		}
+		for k, v := range j.Attributes.System {
+			sys[k] = v
+		}
+	}
+	user["jobid"] = id
+	j.Attributes = &Attributes{System: sys, User: user}
+	return j
+}
+
+// JobID is the control plane id stamped by WithJobID, if any.
+func (j Jobspec) JobID() string {
+	if j.Attributes != nil && j.Attributes.User != nil {
+		if s, ok := j.Attributes.User["jobid"].(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 func (j Jobspec) Nodes() int { n, _, _, _ := j.counts(); return n }
 
-// Exclusive reports whether the job wants WHOLE nodes. True when a node resource
-// is marked exclusive, and also when no cores are requested at all: a node-level
-// request with no per-core detail means "give me these nodes", not "give me one
-// core on each of them".
+// Exclusive reports whether the job wants whole nodes: a node marked exclusive,
+// or a node request with no cores.
 func (j Jobspec) Exclusive() bool {
 	var walk func(rs []Resource) bool
 	walk = func(rs []Resource) bool {

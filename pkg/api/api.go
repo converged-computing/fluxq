@@ -70,6 +70,8 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /v1/jobs", s.jobs)
 	mux.HandleFunc("GET /v1/jobs/{id}", s.job)
 	mux.HandleFunc("GET /v1/jobs/{id}/log", s.log)
+	mux.HandleFunc("POST /v1/jobs/{id}/cancel", s.cancelJob)
+	mux.HandleFunc("POST /v1/jobs/cancel", s.cancelAll)
 	return mux
 }
 
@@ -420,4 +422,23 @@ func dash(s string) string {
 // contiguous quantile ranges over node sizes. Read-only.
 func (s *Server) vocabulary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, vocabulary.Derive(s.M.Clusters()))
+}
+
+// cancelJob stops one job and releases what it held.
+func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.M.Cancel(id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]string{"cancelled": id})
+}
+
+// cancelAll stops every job still in flight.
+func (s *Server) cancelAll(w http.ResponseWriter, r *http.Request) {
+	ids := s.M.CancelAll()
+	if ids == nil {
+		ids = []string{}
+	}
+	writeJSON(w, map[string]any{"cancelled": ids, "count": len(ids)})
 }
