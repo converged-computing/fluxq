@@ -136,3 +136,74 @@ func TestSecretaryTokenMountedWhenRegistered(t *testing.T) {
 		t.Error("the container does not mount the token")
 	}
 }
+
+// gpuJobspec is what the selector emits: slot -> node(exclusive) -> gpu.
+func gpuJobspec(nodes int, gpu, efa bool) jobspec.Jobspec {
+	node := jobspec.Resource{Type: "node", Count: 1, Exclusive: true}
+	if gpu {
+		node.With = []jobspec.Resource{{Type: "gpu", Count: 1}}
+	}
+	req := map[string][]jobspec.Resource{}
+	if efa {
+		req["network"] = []jobspec.Resource{{Type: "anyof", With: []jobspec.Resource{
+			{Type: "efa"}, {Type: "ethernet"}}}}
+	}
+	js := jobspec.New("app", "img", []string{"run"}, nodes, 0, time.Hour, req)
+	js.Resources = []jobspec.Resource{{Type: "slot", Count: nodes, Label: "default",
+		With: []jobspec.Resource{node}}}
+	return js
+}
+
+func deviceCluster(id, network string, gpus int) graph.ClusterGraph {
+	f := []cluster.NodeFacts{{Arch: "amd64", Network: network, Cores: 8, GPUs: gpus,
+		MemoryGB: 32}}
+	if gpus > 0 {
+		f[0].GPUVendor = "nvidia"
+	}
+	subs, _, _ := cluster.SubsystemsFromFacts(f)
+	subs[graph.ContainmentSubsystem] = cluster.ContainmentFromFacts(id, graph.FluxOperator, "h", f)
+	return graph.ClusterGraph{ID: id, Manager: graph.FluxOperator, Handle: "h", Subsystems: subs}
+}
+
+func TestDevicesAreRequestedOrDispatchIsRefused(t *testing.T) {
+	// A pod only receives a device it requests. Emitting a manifest without the
+	// limit means the job runs with no GPU, or with MPI silently on TCP instead
+	// of EFA, and still produces numbers. That is the failure this guards.
+	for _, tc := range []struct {
+		name    string
+		js      jobspec.Jobspec
+		target  graph.ClusterGraph
+		want    string
+		refused bool
+	}{
+		{"gpu on a 4 gpu node", gpuJobspec(2, true, false),
+			deviceCluster("gpu4", "ethernet", 4), "nvidia.com/gpu: 4", false},
+		{"gpu on a cpu cluster", gpuJobspec(2, true, false),
+			deviceCluster("cpu", "ethernet", 0), "", true},
+		{"efa on an efa cluster", gpuJobspec(2, false, true),
+			deviceCluster("efa", "efa", 0), "vpc.amazonaws.com/efa: 1", false},
+		{"efa on an ethernet cluster", gpuJobspec(2, false, true),
+			deviceCluster("cpu", "ethernet", 0), "", true},
+		{"plain job", gpuJobspec(2, false, false),
+			deviceCluster("cpu", "ethernet", 0), "", false},
+	} {
+		out, err := transform.Stub{}.Transform(tc.js, tc.target)
+		if tc.refused {
+			if err == nil {
+				t.Errorf("%s: must refuse rather than dispatch without the device:\n%s",
+					tc.name, out.Payload)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: unexpected error %v", tc.name, err)
+			continue
+		}
+		if tc.want != "" && !strings.Contains(out.Payload, tc.want) {
+			t.Errorf("%s: missing %q in:\n%s", tc.name, tc.want, out.Payload)
+		}
+		if tc.want == "" && strings.Contains(out.Payload, "resources:") {
+			t.Errorf("%s: should not request devices:\n%s", tc.name, out.Payload)
+		}
+	}
+}

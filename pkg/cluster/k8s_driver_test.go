@@ -167,3 +167,19 @@ func TestConnectRequiresConfig(t *testing.T) {
 		t.Fatal("expected error when neither kubeconfig nor context is set")
 	}
 }
+
+func TestStatusTreatsMissingObjectAsTerminal(t *testing.T) {
+	// The operator reaps finished MiniClusters and harnesses delete objects after
+	// collecting logs. If Status reports an error for a vanished object, the
+	// manager's status loop skips it and NEVER frees the allocation, so the
+	// cluster reports no free capacity forever.
+	d, _ := fakeDriver()
+	st, note, err := d.Status(graph.ClusterGraph{ID: "c1"},
+		"miniclusters.flux-framework.org/default/gone")
+	if err != nil {
+		t.Fatalf("a missing object must not be an error: %v", err)
+	}
+	if !st.Terminal() {
+		t.Fatalf("missing object should be terminal, got %q (%s)", st, note)
+	}
+}

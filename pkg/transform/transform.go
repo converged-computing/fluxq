@@ -74,7 +74,11 @@ func (Stub) Transform(js jobspec.Jobspec, target graph.ClusterGraph) (cluster.Co
 	case graph.K8sJob:
 		return cluster.Content{Kind: "manifest", Payload: k8sJob(js, target)}, nil
 	case graph.FluxOperator:
-		return cluster.Content{Kind: "manifest", Payload: miniCluster(js, target)}, nil
+		body, err := miniCluster(js, target)
+		if err != nil {
+			return cluster.Content{}, err
+		}
+		return cluster.Content{Kind: "manifest", Payload: body}, nil
 	case graph.SlurmOperator:
 		return cluster.Content{Kind: "manifest", Payload: slurmJob(js, target)}, nil
 	default:
@@ -100,12 +104,16 @@ spec:
 `, js.Name(), js.Nodes(), js.Nodes(), js.Image(), quoteList(js.Command()))
 }
 
-func miniCluster(js jobspec.Jobspec, target graph.ClusterGraph) string {
+func miniCluster(js jobspec.Jobspec, target graph.ClusterGraph) (string, error) {
 	// launcher: true so the operator does NOT wrap the command in its own flux
 	// submit. flux-secretary owns submission: it runs inside the allocation,
 	// reads what Flux actually has, and sizes the launch accordingly. Nothing out
 	// here can know that. tasks: 0 keeps the operator from adding an -n of its
 	// own, which produced "alloc denied due to type=unsatisfiable".
+	devices, err := deviceResources(js, target)
+	if err != nil {
+		return "", err
+	}
 	return fmt.Sprintf(`apiVersion: flux-framework.org/v1alpha2
 kind: MiniCluster
 metadata:
@@ -119,9 +127,82 @@ spec:
       command: %q
       commands:
         pre: %s
-%s`, js.Name(), js.Nodes(), fluxBlock(target), secretaryVolume(target, "  "),
+%s%s`, js.Name(), js.Nodes(), fluxBlock(target), secretaryVolume(target, "  "),
 		js.Image(), secretaryCommand(js), secretaryInstall,
-		secretaryVolume(target, "      "))
+		devices, secretaryVolume(target, "      ")), nil
+}
+
+// deviceResources writes the container resource limits for hardware the job
+// requires.
+//
+// A Kubernetes pod only ever receives a device it explicitly requests: a GPU pod
+// with no nvidia.com/gpu limit starts with no visible device, and an EFA pod with
+// no vpc.amazonaws.com/efa limit gets no interface and its MPI quietly falls back
+// to TCP. Both failures are silent, which is worse than a crash, because the job
+// still produces numbers.
+//
+// So this returns an ERROR rather than omitting a device the job asked for. A
+// scheduler that places work on hardware the job never receives is not measuring
+// anything.
+func deviceResources(js jobspec.Jobspec, target graph.ClusterGraph) (string, error) {
+	limits := []string{}
+
+	if js.GPUsPerNode() > 0 {
+		count := target.GPUsPerNode()
+		if count < 1 {
+			return "", fmt.Errorf(
+				"job requires a GPU but cluster %q advertises none: dispatching "+
+					"would run with no device", target.ID)
+		}
+		vendor := ""
+		for _, v := range []string{"nvidia", "amd"} {
+			if target.SubsystemHas("gpu", v) {
+				vendor = v
+				break
+			}
+		}
+		if vendor == "" {
+			return "", fmt.Errorf(
+				"job requires a GPU but cluster %q does not say which vendor: "+
+					"cannot write a resource limit", target.ID)
+		}
+		// Whole node exclusive, so claim every GPU the node has.
+		limits = append(limits, fmt.Sprintf("%s.com/gpu: %d", vendor, count))
+	}
+
+	// EFA is requested only when the job asked for it, and it must be present:
+	// a job matched on network=efa that runs over TCP measures the wrong thing.
+	if requiresValue(js, "network", "efa") {
+		if !target.SubsystemHas("network", "efa") {
+			return "", fmt.Errorf("job requires efa but cluster %q does not advertise it",
+				target.ID)
+		}
+		limits = append(limits, "vpc.amazonaws.com/efa: 1")
+	}
+
+	if len(limits) == 0 {
+		return "", nil
+	}
+	out := "      resources:\n        limits:\n"
+	for _, l := range limits {
+		out += "          " + l + "\n"
+	}
+	return out, nil
+}
+
+// requiresValue reports whether a requires section names a value, including
+// inside an anyof.
+func requiresValue(js jobspec.Jobspec, sub, value string) bool {
+	var walk func(rs []jobspec.Resource) bool
+	walk = func(rs []jobspec.Resource) bool {
+		for _, r := range rs {
+			if r.Type == value || walk(r.With) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(js.Requires[sub])
 }
 
 // The secretary is installed with the interpreter Flux ships its bindings for.

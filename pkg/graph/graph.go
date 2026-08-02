@@ -117,6 +117,62 @@ func (c ClusterGraph) CoresPerNode() int {
 	return minCores
 }
 
+// GPUsPerNode is the smallest gpu count across the cluster's node vertices, or
+// 0 when there are none. A pod only receives a device it explicitly requests, so
+// the transform needs this number to write a resource limit. The jobspec cannot
+// carry it: the selector asked for a GPU without knowing which cluster it would
+// land on.
+func (c ClusterGraph) GPUsPerNode() int {
+	g := c.Containment()
+	if g == nil {
+		return 0
+	}
+	byID, children := g.IndexExported()
+	minGPUs := -1
+	for _, n := range g.VerticesOfTypeExported("node") {
+		gpus := 0
+		var walk func(id string)
+		walk = func(id string) {
+			for _, cid := range children[id] {
+				v := byID[cid]
+				if v == nil {
+					continue
+				}
+				size := v.Metadata.Size
+				if size <= 0 {
+					size = 1
+				}
+				if v.Metadata.Type == "gpu" {
+					gpus += size
+				}
+				walk(cid)
+			}
+		}
+		walk(n.ID)
+		if minGPUs < 0 || gpus < minGPUs {
+			minGPUs = gpus
+		}
+	}
+	if minGPUs < 0 {
+		return 0
+	}
+	return minGPUs
+}
+
+// SubsystemHas reports whether a descriptive subsystem advertises a value.
+func (c ClusterGraph) SubsystemHas(sub, value string) bool {
+	g := c.Subsystems[sub]
+	if g == nil {
+		return false
+	}
+	for i := range g.Graph.Nodes {
+		if g.Graph.Nodes[i].Metadata.Type == value {
+			return true
+		}
+	}
+	return false
+}
+
 func (c ClusterGraph) Cfg(key string) string { return c.Config[key] }
 
 // Emulated reports whether this cluster is an explicit simulation (config
