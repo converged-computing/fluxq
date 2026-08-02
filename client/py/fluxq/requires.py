@@ -61,6 +61,21 @@ def section(values: list[str]) -> list | None:
     return [anyof(vals)] if len(vals) > 1 else [{"type": vals[0]}]
 
 
+def memory_at_least(bucket: str, allowed: list[str]) -> list | None:
+    """A memory requirement as a lower bound: the named bucket or any larger one.
+
+    A cluster advertises the single bucket its nodes fall into, so an exact match
+    refuses a job that would fit with room to spare. 64-192GB against a fleet of
+    16-64GB and 192GB+ nodes matched nothing at all, while both 256GB clusters
+    could have run it.
+    """
+    order = list(allowed or [])
+    if bucket not in order:
+        return None
+    higher = order[order.index(bucket):]
+    return section(higher)
+
+
 # Launchers the RUNTIME provides. A jobspec declares parallelism in
 # tasks[].count; wrapping the command in a launcher double-launches under flux.
 LAUNCHERS = ("mpirun", "mpiexec", "srun", "flux", "jsrun", "aprun", "oshrun", "prun")

@@ -64,7 +64,7 @@ func (m *Manager) runAttempt(j queue.Job) attemptResult {
 	if !ok {
 		return attemptResult{outcome: outcomeHardFail, note: "assigned cluster not found"}
 	}
-	content, err := m.Trans.Transform(j.Spec, c)
+	content, err := m.Trans.Transform(j.Spec.WithJobID(j.ID), c)
 	if err != nil {
 		return attemptResult{outcome: outcomeHardFail, note: "transform: " + err.Error()}
 	}

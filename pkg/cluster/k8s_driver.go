@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -65,9 +66,7 @@ func NewK8sDriver() *K8sDriver {
 func (d *K8sDriver) Type() graph.ManagerType { return graph.K8sJob }
 
 // Types reports every manager this driver serves. Dispatch is manifest-kind
-// agnostic, so the same driver handles Flux Operator MiniClusters; without this
-// a flux-operator cluster has no real driver and multi-node MPI is impossible
-// (a batch/v1 Job is a single pod).
+// agnostic, so one driver covers both a batch/v1 Job and a MiniCluster.
 func (d *K8sDriver) Types() []graph.ManagerType {
 	return []graph.ManagerType{graph.K8sJob, graph.FluxOperator}
 }
@@ -215,17 +214,21 @@ func (d *K8sDriver) Status(target graph.ClusterGraph, handle string) (queue.Stat
 	}
 	u, err := ri.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		// A vanished object is TERMINAL, not an error. The operator reaps a
-		// finished MiniCluster, and harnesses delete objects after collecting
-		// logs; reporting an error here makes the manager's status loop skip the
-		// job, so its allocation is never freed and the cluster looks
-		// permanently full to every job that follows.
+		// A vanished object is terminal, not an error: reporting one here would
+		// leave the allocation held forever.
 		if apierrors.IsNotFound(err) {
 			return queue.Completed, res + " no longer present (reaped or deleted)", nil
 		}
 		return "", "", fmt.Errorf("get %s: %w", handle, err)
 	}
 	st, note := readState(u)
+	if st.Terminal() {
+		return st, note, nil
+	}
+	// A MiniCluster does not report completion itself, so ask the Job it owns.
+	if s, n, ok := ownedJobState(d, target, ns, u.GetUID()); ok {
+		return s, n, nil
+	}
 	return st, note, nil
 }
 
@@ -405,4 +408,43 @@ func nodeHasResource(n corev1.Node, name corev1.ResourceName) bool {
 		return q.Value() > 0
 	}
 	return false
+}
+
+// ownedJobState reads completion from a batch/v1 Job owned by uid. A MiniCluster
+// does not report completion itself.
+func ownedJobState(d *K8sDriver, target graph.ClusterGraph, ns string,
+	uid types.UID) (queue.State, string, bool) {
+	if ns == "" {
+		ns = d.namespace(target)
+	}
+	_, typed, _, err := d.connect(target)
+	if err != nil || typed == nil {
+		return "", "", false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d.timeout())
+	defer cancel()
+	jobs, err := typed.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", "", false
+	}
+	for i := range jobs.Items {
+		j := &jobs.Items[i]
+		owned := false
+		for _, o := range j.GetOwnerReferences() {
+			if o.UID == uid {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			continue
+		}
+		if j.Status.Succeeded > 0 {
+			return queue.Completed, fmt.Sprintf("job %s succeeded", j.Name), true
+		}
+		if j.Status.Failed > 0 {
+			return queue.Failed, fmt.Sprintf("job %s failed", j.Name), true
+		}
+	}
+	return "", "", false
 }

@@ -68,6 +68,12 @@ def _add_select(sub) -> None:
     s.add_argument(
         "--clusters", help="clusters JSON file OR a fluxq base URL (GET /v1/clusters)"
     )
+    s.add_argument(
+        "--vocabulary",
+        default="vocabulary.json",
+        help="the scheduling ontology (a file). Authoring must not depend on the "
+        "fleet, so this is fixed input rather than something read from a server",
+    )
     s.add_argument("--goal", default="Choose the best container per application.")
     s.add_argument(
         "--out-dir", default="jobspecs", help="where to write the jobspec tree"
@@ -86,11 +92,14 @@ def cmd_select(args) -> None:
         else {
             "manifests_dir": args.manifests_dir,
             "clusters": args.clusters,
+            "vocabulary": args.vocabulary,
             "goal": args.goal,
             "out_dir": args.out_dir,
             "duration_s": args.duration,
         }
     )
+    # A run manifest may name its own vocabulary; the flag fills it in when not.
+    manifest.setdefault("vocabulary", args.vocabulary)
     outcome = anyio.run(
         run_task, SelectorTask(), make_runner(backend, args.model), manifest
     )

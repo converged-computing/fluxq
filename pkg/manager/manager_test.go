@@ -212,3 +212,30 @@ func swFleet(t *testing.T, f *graph.Fleet) *graph.Fleet {
 	}
 	return f
 }
+
+func TestCancelReleasesTheAllocation(t *testing.T) {
+	// Without a cancel the only way to clear a stuck job is restarting the
+	// control plane, which also discards the registered fleet.
+	f := loadFleet(t)
+	m, _ := newManager(t, f, nil)
+	stop := make(chan struct{})
+	go m.Run(stop)
+	defer close(stop)
+
+	id, err := m.Submit(lammps("j", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, m, id, queue.Running)
+
+	if err := m.Cancel(id); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	j, _ := m.Queue.Get(id)
+	if !j.State.Terminal() {
+		t.Fatalf("a cancelled job must be terminal, got %s", j.State)
+	}
+	if len(m.CancelAll()) != 0 {
+		t.Error("nothing should remain in flight after cancelling")
+	}
+}

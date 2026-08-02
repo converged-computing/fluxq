@@ -11,11 +11,8 @@ import (
 	"fmt"
 )
 
-// StandardMemoryBuckets is the FIXED memory vocabulary. It is absolute, not
-// fleet-relative, so a container's memory need can be stated without knowing
-// which clusters exist. Discovery maps a cluster's node memory into these same
-// buckets, so `requires.memory` and the registered `memory` subsystem meet by
-// construction.
+// StandardMemoryBuckets is the fixed memory vocabulary, absolute rather than
+// fleet relative.
 var StandardMemoryBuckets = []string{"0-16GB", "16-64GB", "64-192GB", "192GB+"}
 
 // StandardRangeFor returns the standard bucket a node size falls into.

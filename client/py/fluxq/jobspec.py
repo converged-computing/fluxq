@@ -14,17 +14,10 @@ from typing import Any
 
 
 def containment(nodes: int, needs_gpu: bool = False) -> list[dict]:
-    """Whole-node containment: one slot per node, each slot holding an exclusive node.
+    """Whole-node containment: one slot per node, each holding an exclusive node.
 
-        slot(count=N, label=default) -> node(count=1, exclusive)
-
-    The slot sits ABOVE the node because a slot is the unit a task runs in, and
-    here one task gets one whole node. Nothing below the node is specified: the
-    selector chooses a CONTAINER and a NODE COUNT, and cannot know a node's cores
-    or GPUs because the cluster is not chosen yet. The transform derives ranks
-    from whatever cluster the job matches.
-
-    A GPU need is PRESENCE (1 gpu on the node), not a count, for the same reason.
+    Nothing below the node is specified. The selector chooses a container and a
+    node count; it cannot know a node's cores because the cluster is not chosen.
     """
     node: dict = {"type": "node", "count": 1, "exclusive": True}
     if needs_gpu:
@@ -52,14 +45,12 @@ def build_jobspec(
         system["job"] = {"name": name}
     user: dict[str, Any] = {"image": image}
     if container:
-        # Free-form context for the transform agent (mpi flavor, arch, accelerator).
-        # Flux does not interpret attributes.user, so none of this affects matching.
+        # Context for the transform. Flux does not interpret attributes.user.
         user["container"] = container
     js: dict[str, Any] = {
         "version": 1,
         "resources": containment(nodes, needs_gpu),
-        # One task per node slot. The transform expands ranks to the chosen
-        # cluster's actual cores; the command carries no launcher.
+        # One task per node slot; the transform expands ranks to the real cores.
         "tasks": [{"command": command, "slot": "default", "count": {"per_slot": 1}}],
         "attributes": {"system": system, "user": user},
     }
@@ -77,8 +68,7 @@ class SelectedJob:
     alternatives: list[str] = field(default_factory=list)
 
     def provenance(self) -> dict:
-        """How this jobspec was authored. Audit data written beside the jobspec,
-        never inside it."""
+        """How this jobspec was authored, written beside it rather than in it."""
         return {
             "application": self.application,
             "chosen_reference": self.chosen_reference,
@@ -88,16 +78,10 @@ class SelectedJob:
 
 
 def save_jobspecs(jobs: list[SelectedJob], root: str) -> list[str]:
-    """Write each selection as TWO files:
+    """Write each selection as jobspec.json plus provenance.json.
 
-      jobspec.json     the jobspec and nothing else — submit it as-is
-      provenance.json  how it was authored (chosen container, alternatives,
-                       reasoning); audit data, never part of the jobspec
-
-    Deployment metadata the transform needs (the container image, and anything
-    added later) travels inside the jobspec's `attributes.user`, which Flux
-    defines as free-form and the matcher ignores — so the jobspec stays purely
-    about scheduling while still carrying what a manifest needs.
+    The jobspec carries nothing but the job. Deployment metadata the transform
+    needs travels in attributes.user, which Flux leaves uninterpreted.
     """
     written = []
     for job in jobs:

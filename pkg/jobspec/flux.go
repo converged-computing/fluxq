@@ -89,10 +89,7 @@ func SubsystemFluxSpec(section []Resource) (string, error) {
 	if len(section) == 0 {
 		return "", fmt.Errorf("empty subsystem section")
 	}
-	// A `requires` entry names a capability, so it usually carries no count.
-	// Fluxion reads count literally, and a request for ZERO of a type never
-	// matches — the section must ask for at least one of each. (The dev-double
-	// matcher ignores counts, so this only shows up against real Fluxion.)
+	// Fluxion reads count literally and never matches a request for zero.
 	slot := Resource{Type: "slot", Count: 1, Label: "satisfy", With: atLeastOne(section)}
 	doc := fluxDoc{
 		Version:    1,
@@ -137,8 +134,9 @@ type fluxDoc struct {
 	Attributes map[string]any `json:"attributes"`
 }
 
-// atLeastOne returns the section with every unset/zero count raised to 1,
-// recursively. It does not mutate the caller's resources.
+// atLeastOne raises every unset count to 1, recursively. A requires entry names
+// a capability and carries no count, and Fluxion never matches a request for
+// zero.
 func atLeastOne(section []Resource) []Resource {
 	out := make([]Resource, len(section))
 	for i, r := range section {

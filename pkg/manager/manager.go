@@ -420,7 +420,7 @@ func (m *Manager) dispatchNow(id string) {
 	j.State = queue.Dispatching
 	_ = m.Queue.Update(j)
 
-	content, err := m.Trans.Transform(j.Spec, c)
+	content, err := m.Trans.Transform(j.Spec.WithJobID(j.ID), c)
 	if err != nil {
 		m.failJob(j, "transform: "+err.Error())
 		return
@@ -565,7 +565,51 @@ func pad(n int) string {
 	return string(s)
 }
 
-// Logs returns the target-side log for a job by resolving its driver+handle.
+// Cancel stops a job at its cluster and releases what it held.
+func (m *Manager) Cancel(jobID string) error {
+	m.mu.Lock()
+	j, ok := m.Queue.Get(jobID)
+	m.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("job %q not found", jobID)
+	}
+	if j.State.Terminal() {
+		return nil // already done; nothing to stop and nothing held
+	}
+
+	// Best effort remotely; the allocation must be released either way.
+	var cancelErr error
+	if j.RemoteHandle != "" && j.ClusterID != "" {
+		if c, ok := m.Fleet.Get(j.ClusterID); ok {
+			if drv, err := m.driverFor(c); err == nil {
+				cancelErr = drv.Cancel(c, j.RemoteHandle)
+			}
+		}
+	}
+	note := "cancelled"
+	if cancelErr != nil {
+		note = fmt.Sprintf("cancelled (remote: %v)", cancelErr)
+	}
+	m.failByID(jobID, note)
+	return nil
+}
+
+// Cancel stops a job at its cluster and releases what it held.
+func (m *Manager) CancelAll() []string {
+	m.mu.Lock()
+	var ids []string
+	for _, j := range m.Queue.All() {
+		if !j.State.Terminal() {
+			ids = append(ids, j.ID)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range ids {
+		_ = m.Cancel(id)
+	}
+	return ids
+}
+
 func (m *Manager) Logs(jobID string) (string, error) {
 	j, ok := m.Queue.Get(jobID)
 	if !ok {
