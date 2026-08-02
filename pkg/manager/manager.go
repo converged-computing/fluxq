@@ -491,6 +491,9 @@ func (m *Manager) monitorOnce() {
 		}
 		st, note, err := drv.Status(c, j.RemoteHandle)
 		if err != nil {
+			// Log it: a driver that persistently cannot answer pins capacity,
+			// and silence makes that invisible.
+			m.logf("status %s: %v", j.ID, err)
 			continue
 		}
 		if st != j.State || note != j.Note {

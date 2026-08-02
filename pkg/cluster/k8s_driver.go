@@ -28,6 +28,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -214,6 +215,14 @@ func (d *K8sDriver) Status(target graph.ClusterGraph, handle string) (queue.Stat
 	}
 	u, err := ri.Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
+		// A vanished object is TERMINAL, not an error. The operator reaps a
+		// finished MiniCluster, and harnesses delete objects after collecting
+		// logs; reporting an error here makes the manager's status loop skip the
+		// job, so its allocation is never freed and the cluster looks
+		// permanently full to every job that follows.
+		if apierrors.IsNotFound(err) {
+			return queue.Completed, res + " no longer present (reaped or deleted)", nil
+		}
 		return "", "", fmt.Errorf("get %s: %w", handle, err)
 	}
 	st, note := readState(u)
