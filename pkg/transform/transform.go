@@ -330,12 +330,19 @@ var secretaryViews = []struct {
 	arm    bool
 }{
 	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-noble", "2.39", "python3.13", false},
-	//	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-jammy", "2.35", "python3.11", false},
 	{"ghcr.io/converged-computing/flux-view-ubuntu:jammy", "2.35", "python3.14", false},
 	{"ghcr.io/converged-computing/flux-view-ubuntu:tag-focal", "2.31", "python3.11", false},
 	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-noble", "2.39", "python3.13", true},
-	//	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-jammy", "2.35", "python3.11", true},
-	{"ghcr.io/converged-computing/flux-view-ubuntu:jammy", "2.35", "python3.14", true},
+	// jammy-arm, NOT jammy. :jammy is amd64 only, and pointing the arm row at it
+	// mounted an amd64 view on an arm cluster: the operator copied the view into
+	// place and the container then died with "exec /bin/bash: exec format error".
+	// Both arm64 applications failed that way in every replicate, in both arms,
+	// which reads as an application problem and is not one.
+	//
+	// jammy-arm is the arm64 build of the same view as :jammy, so it carries the
+	// same interpreter. The older arm-jammy image is a different build with
+	// python3.11 and is not interchangeable.
+	{"ghcr.io/converged-computing/flux-view-ubuntu:jammy-arm", "2.35", "python3.14", true},
 	{"ghcr.io/converged-computing/flux-view-ubuntu:arm-focal", "2.31", "python3.11", true},
 }
 

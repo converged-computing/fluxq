@@ -20,7 +20,9 @@ import (
 	"github.com/converged-computing/fluxq/pkg/graph"
 	"github.com/converged-computing/fluxq/pkg/jobspec"
 	"github.com/converged-computing/fluxq/pkg/manager"
+	"github.com/converged-computing/fluxq/pkg/matcher"
 	"github.com/converged-computing/fluxq/pkg/queue"
+	"github.com/converged-computing/fluxq/pkg/score"
 	"github.com/converged-computing/fluxq/pkg/vocabulary"
 )
 
@@ -308,7 +310,21 @@ func (s *Server) satisfy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
+	// ?trace=1 returns the decision alongside the ranking: every cluster
+	// considered, what each rejected one was missing, and the score in terms.
+	// Default off so the existing shape is unchanged for existing callers.
+	if r.URL.Query().Get("trace") != "" {
+		ranked, tr := s.M.SatisfyWithTrace(js)
+		writeJSON(w, SatisfyReceipt{Candidates: ranked, Trace: tr})
+		return
+	}
 	writeJSON(w, s.M.Satisfy(js))
+}
+
+// SatisfyReceipt is the ranked candidates and the record of how they were ranked.
+type SatisfyReceipt struct {
+	Candidates []matcher.Candidate `json:"candidates"`
+	Trace      score.Trace         `json:"trace"`
 }
 
 func decodeJob(r *http.Request) (jobspec.Jobspec, error) {
