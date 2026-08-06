@@ -313,7 +313,7 @@ func TestFluxViewCarriesTheSecretary(t *testing.T) {
 		wantArm    bool
 	}{
 		{"amd64 default", "amd64", nil, "flux-view-ubuntu:jammy", false},
-		{"arm64 default", "arm64", nil, "flux-view-ubuntu:jammy", true},
+		{"arm64 default", "arm64", nil, "flux-view-ubuntu:jammy-arm", true},
 		{"explicit view", "amd64", map[string]string{"secretary_view": "ghcr.io/me/v:1"},
 			"ghcr.io/me/v:1", false},
 	} {
@@ -582,5 +582,52 @@ func TestViewIsPulledAndPipIsBootstrapped(t *testing.T) {
 	}
 	if strings.Index(body, "flux R encode") < strings.Index(body, "pip install") {
 		t.Errorf("the install must come first:\n%s", body)
+	}
+}
+
+func TestArmClustersGetAnArmView(t *testing.T) {
+	// The arm row pointed at :jammy, which is amd64 only. The operator mounted it
+	// on an arm cluster, copied the view into place, and the container then died
+	// with "exec /bin/bash: exec format error" — in both arms, in every replicate,
+	// for both arm64 applications. That reads as an application failure and is not
+	// one, so the pairing is asserted rather than left to the table.
+	mk := func(arch string) graph.ClusterGraph {
+		f := []cluster.NodeFacts{{Arch: arch, Network: "ethernet", Cores: 8,
+			MemoryGB: 29}}
+		sub, _, _ := cluster.SubsystemsFromFacts(f)
+		sub[graph.ContainmentSubsystem] = cluster.ContainmentFromFacts(
+			"c", graph.FluxOperator, "h", f)
+		return graph.ClusterGraph{ID: "c", Manager: graph.FluxOperator, Handle: "h",
+			Subsystems: sub}
+	}
+	js := jobspec.New("app", "img", []string{"run"}, 2, 0, time.Hour, nil)
+
+	for _, tc := range []struct {
+		arch, wantView, wantPython string
+		wantArmFlag                bool
+	}{
+		{"amd64", "flux-view-ubuntu:jammy", "python3.14", false},
+		{"arm64", "flux-view-ubuntu:jammy-arm", "python3.14", true},
+	} {
+		out, err := transform.Stub{}.Transform(js, mk(tc.arch))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := string(out.Payload)
+		if !strings.Contains(body, "image: ghcr.io/converged-computing/"+tc.wantView) {
+			t.Errorf("%s: want %s:\n%s", tc.arch, tc.wantView, body)
+		}
+		// the amd64 image name is a prefix of nothing else, but be explicit: an
+		// arm cluster must never be handed the amd64 view
+		if tc.arch == "arm64" &&
+			strings.Contains(body, "flux-view-ubuntu:jammy\n") {
+			t.Errorf("arm64 cluster was given the amd64 view:\n%s", body)
+		}
+		if !strings.Contains(body, "/view/bin/"+tc.wantPython+" -m ensurepip") {
+			t.Errorf("%s: want %s installing:\n%s", tc.arch, tc.wantPython, body)
+		}
+		if got := strings.Contains(body, `arch: "arm"`); got != tc.wantArmFlag {
+			t.Errorf("%s: arch arm flag %v, want %v", tc.arch, got, tc.wantArmFlag)
+		}
 	}
 }

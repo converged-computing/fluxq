@@ -35,6 +35,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/converged-computing/fluxq/pkg/graph"
@@ -128,9 +129,21 @@ type subWorker struct {
 }
 
 type clusterCtx struct {
-	id         string
-	cont       *fworker // containment (allocatable); nil until registered
-	subsystems map[string]*subWorker
+	id   string
+	cont *fworker // containment; nil until registered
+	// contDescriptive makes containment satisfy-only: Evaluate still asks whether
+	// the job FITS, and Allocate reserves nothing.
+	//
+	// Reserving against Fluxion only helps when Fluxion is the thing running the
+	// jobs. Here it is not: the work runs on the cluster's own scheduler, and the
+	// reservation is a second, private ledger that can disagree with reality. It
+	// did. Over two iterations the top-ranked cluster lost the allocation and the
+	// loop fell through to a lower one — gke-mid was ranked first 10 times and
+	// selected 4 — so placement was decided by which reservations were stale
+	// rather than by the ranking. A leaked reservation is permanent: the cluster
+	// stays feasible, keeps ranking, and never takes another job.
+	contDescriptive bool
+	subsystems      map[string]*subWorker
 }
 
 type FluxionMatcher struct {
@@ -138,6 +151,7 @@ type FluxionMatcher struct {
 	clusters map[string]*clusterCtx
 	order    []string
 	owner    map[string]*clusterCtx // allocID -> cluster
+	seq      uint64                 // ids for satisfy-only allocations
 }
 
 // workerFromJGF spawns a worker for a subsystem graph. A nil graph yields a nil
@@ -173,7 +187,11 @@ func (m *FluxionMatcher) AddCluster(cg graph.ClusterGraph) error {
 	if err != nil {
 		return fmt.Errorf("cluster %s containment: %w", cg.ID, err)
 	}
-	cc := &clusterCtx{id: cg.ID, cont: cont, subsystems: map[string]*subWorker{}}
+	cc := &clusterCtx{
+		id: cg.ID, cont: cont,
+		contDescriptive: cg.IsDescriptive(graph.ContainmentSubsystem),
+		subsystems:      map[string]*subWorker{},
+	}
 	for name, g := range cg.Subsystems {
 		if name == graph.ContainmentSubsystem {
 			continue
@@ -331,6 +349,15 @@ func (m *FluxionMatcher) Allocate(js jobspec.Jobspec, clusterID string) (Allocat
 	if cc.cont == nil {
 		return Allocation{}, false, nil // no containment: nothing to allocate
 	}
+	if cc.contDescriptive {
+		// Satisfy-only. Evaluate already established that the job fits; there is
+		// nothing to reserve, so hand back an id that Free can recognise and
+		// discard. Placement then follows the ranking rather than the state of a
+		// ledger nobody is honouring.
+		m.seq++
+		id := fmt.Sprintf("nores-%s-%d", clusterID, m.seq)
+		return Allocation{ID: id, ClusterID: clusterID}, true, nil
+	}
 	resp, err := cc.cont.call(wreq{Op: "allocate", Spec: spec})
 	if err != nil {
 		return Allocation{}, false, err // genuine transport/worker failure
@@ -346,6 +373,9 @@ func (m *FluxionMatcher) Allocate(js jobspec.Jobspec, clusterID string) (Allocat
 func (m *FluxionMatcher) Free(allocID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if strings.HasPrefix(allocID, "nores-") {
+		return nil // satisfy-only: nothing was reserved
+	}
 	cc, ok := m.owner[allocID]
 	if !ok {
 		return nil

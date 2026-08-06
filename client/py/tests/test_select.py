@@ -235,7 +235,9 @@ def test_memory_is_a_lower_bound():
     assert [w["type"] for w in sec[0]["with"]] == ["64-192GB", "192GB+"], sec
 
     # the top bucket has nothing above it, so it stays a plain type
-    assert memory_at_least("192GB+", V) == [{"type": "192GB+"}], memory_at_least("192GB+", V)
+    assert memory_at_least("192GB+", V) == [{"type": "192GB+"}], memory_at_least(
+        "192GB+", V
+    )
 
     # the lowest bucket accepts anything
     assert len(memory_at_least("0-16GB", V)[0]["with"]) == 4

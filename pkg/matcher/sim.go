@@ -248,6 +248,12 @@ func (m *SimMatcher) Allocate(js jobspec.Jobspec, clusterID string) (Allocation,
 	if !ok {
 		return Allocation{}, false, fmt.Errorf("cluster %q not registered", clusterID)
 	}
+	// Satisfy-only containment: the caller has said something else owns these
+	// resources, so record nothing. Kept in step with the Fluxion matcher, or dev
+	// and production would place differently.
+	if !cg.Reserves() {
+		return Allocation{ID: m.mint(), ClusterID: clusterID}, true, nil
+	}
 	needNodes := js.Nodes()
 	free := m.fittingNodes(cg, js, true)
 	if len(free) < needNodes {

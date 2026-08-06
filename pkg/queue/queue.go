@@ -46,6 +46,13 @@ type Job struct {
 	Note         string // last human-readable status/error
 	Artifact     string `json:",omitempty"` // last generated native artifact (for repair + audit)
 
+	// How this job's cluster was chosen: every cluster considered, what each
+	// rejected one was missing, the score in terms, and whether the winner was a
+	// tie the shuffle broke. Recorded at dispatch rather than at /satisfy, because
+	// satisfy is a dry run that ranks again and can reach a different answer — a
+	// receipt describing a placement that did not happen is worse than none.
+	Decision any `json:",omitempty"`
+
 	// set when an infeasible job was given a reconciliation suggestion
 	Suggestion    string           `json:",omitempty"` // rationale for a proposed reconfiguration
 	SuggestedSpec *jobspec.Jobspec `json:",omitempty"` // a jobspec that WOULD fit

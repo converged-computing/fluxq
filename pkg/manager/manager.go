@@ -227,10 +227,38 @@ func (m *Manager) scheduleOnce() {
 			m.failInfeasible(j) // impossible on this (non-empty) fleet
 			continue
 		}
+		// Rank before placing. Without this the order came from Matcher.Evaluate
+		// and the first cluster that could allocate always won, so scoring was
+		// decorative and the placement distribution across a fleet of equally
+		// feasible clusters was badly lopsided: one cluster took none of a hundred
+		// jobs and another took a third of them.
+		//
+		// A scorer that does not need the full set still gets a decision record,
+		// it just keeps the cheap path: FirstFeasible exists to commit without
+		// ranking, and ranking it anyway would defeat the point.
+		scored := feasible
+		var decision score.Trace
+		if scorer.NeedsFullSet() {
+			scored, decision = score.RankWithTrace(scorer, j.Spec, cands)
+		} else {
+			decision = score.Trace{
+				Considered: len(cands), Feasible: len(feasible),
+				Scorer:   fmt.Sprintf("%T", scorer),
+				Unranked: true,
+			}
+			for _, c := range cands {
+				if !c.Feasible {
+					decision.Rejected = append(decision.Rejected, score.Rejection{
+						Cluster: c.Cluster, Missing: c.Missing,
+						Matched: c.Matched, FreeNodes: c.FreeNodes})
+				}
+			}
+		}
+
 		// Emulated clusters are satisfy-only: they appear in /satisfy and in
 		// scoring, but are never dispatch targets — emulating a real submit is
 		// meaningless. Place only on clusters that can actually dispatch.
-		ranked := m.dispatchable(feasible)
+		ranked := m.dispatchable(scored)
 		if len(ranked) == 0 {
 			m.setNote(j, fmt.Sprintf("waiting: feasible only on %d emulated (satisfy-only) cluster(s) — register a real dispatch target", len(feasible)))
 			if block {
@@ -238,9 +266,7 @@ func (m *Manager) scheduleOnce() {
 			}
 			continue
 		}
-		if scorer.NeedsFullSet() {
-			ranked = m.dispatchable(score.Rank(scorer, j.Spec, cands))
-		}
+
 		placed := false
 		for _, c := range ranked {
 			alloc, okA, err := m.Matcher.Allocate(j.Spec, c.Cluster)
@@ -252,6 +278,12 @@ func (m *Manager) scheduleOnce() {
 				j.AllocID = alloc.ID
 				j.ClusterID = alloc.ClusterID
 				j.Note = ""
+				// The cluster actually taken may not be the top of the ranking:
+				// a higher one can be out of capacity at Allocate. Record what
+				// was chosen alongside how it was ranked, or the receipt implies
+				// a decision that was overtaken by events.
+				decision.Selected = alloc.ClusterID
+				j.Decision = decision
 				_ = m.Queue.Update(j)
 				m.logf("match %s -> cluster %s (alloc %s)", j.ID, j.ClusterID, j.AllocID)
 				_ = m.dispatcher().Dispatch(j)
@@ -302,7 +334,18 @@ func (m *Manager) scorer() score.Scorer {
 // Satisfy evaluates the fleet for a job and returns the ranked feasible
 // candidates WITHOUT allocating anything (the /assess dry-run).
 func (m *Manager) Satisfy(js jobspec.Jobspec) []matcher.Candidate {
-	return score.Rank(m.scorer(), js, m.Matcher.Evaluate(js))
+	ranked, _ := score.RankWithTrace(m.scorer(), js, m.Matcher.Evaluate(js))
+	return ranked
+}
+
+// SatisfyWithTrace is Satisfy plus a record of how the decision was reached:
+// every cluster considered, what each was missing, the score broken into terms,
+// and whether the winner was a tie the shuffle happened to break.
+//
+// Ranked candidates alone say where a job would go. Answering why needs the
+// clusters that lost and the reason each lost, which is the half Rank discards.
+func (m *Manager) SatisfyWithTrace(js jobspec.Jobspec) ([]matcher.Candidate, score.Trace) {
+	return score.RankWithTrace(m.scorer(), js, m.Matcher.Evaluate(js))
 }
 
 func (m *Manager) anyFeasible(js jobspec.Jobspec) bool {
@@ -341,7 +384,16 @@ func (m *Manager) DiscoverCluster(clusterID string) ([]string, error) {
 	// before any descriptive subsystem can attach (and what makes the cluster
 	// non-empty / schedulable).
 	cont := cluster.ContainmentFromFacts(clusterID, cg.Manager, cg.Handle, facts)
-	if err := m.RegisterSubsystem(clusterID, graph.ContainmentSubsystem, cont, false); err != nil {
+	// Ask the cluster, do not assume. Containment is countable by default, but a
+	// cluster registered with reserve=false wants it satisfy-only: the work runs on
+	// that cluster's own scheduler, so a reservation here is a private ledger that
+	// can drift from reality, and a leaked one is permanent — the cluster stays
+	// feasible, keeps ranking first, and never takes another job.
+	//
+	// Passing false literally here overrode IsDescriptive entirely, so reserve=false
+	// was accepted, stored, and silently ignored.
+	if err := m.RegisterSubsystem(clusterID, graph.ContainmentSubsystem, cont,
+		cg.IsDescriptive(graph.ContainmentSubsystem)); err != nil {
 		return nil, fmt.Errorf("register containment: %w", err)
 	}
 	subs, _, err := cluster.SubsystemsFromFacts(facts)

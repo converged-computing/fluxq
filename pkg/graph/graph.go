@@ -173,6 +173,18 @@ func (c ClusterGraph) Cfg(key string) string { return c.Config[key] }
 // everything else in Config is backend-interpreted.
 func (c ClusterGraph) Emulated() bool { return c.Cfg("emulate") == "true" }
 
+// Reserves reports whether this cluster's containment should be allocated against
+// rather than only satisfied. A core dispatch-mode selector, like emulate.
+//
+// Reserving is right when the matcher owns the resources. It is wrong when
+// something else runs the work — a Kubernetes scheduler, say — because the
+// reservation is then a private ledger that can drift from what is actually
+// running, and a leaked one is permanent: the cluster stays feasible, keeps
+// ranking, and never takes another job.
+//
+//	--config reserve=false   satisfy-only containment
+func (c ClusterGraph) Reserves() bool { return c.Cfg("reserve") != "false" }
+
 // Fleet is a concurrency-safe registry of clusters. Clusters can be added and
 // removed at runtime (via the API), so it is always used as *Fleet and must not
 // be copied.
@@ -318,11 +330,17 @@ func firstNonEmpty(xs ...string) string {
 }
 
 // IsDescriptive reports whether a subsystem is satisfy-only (never allocated).
-// Containment is always countable; unknown auxiliary subsystems default to
-// descriptive.
+//
+// Containment is countable by default: a scheduler that owns the resources should
+// reserve them. A cluster may declare it descriptive instead, for the case where
+// something else runs the work and this is only deciding where to send it —
+// reserving there keeps a private ledger that can drift from reality, and a leaked
+// reservation makes a cluster feasible forever and dispatchable never.
+//
+// Unknown auxiliary subsystems default to descriptive.
 func (c ClusterGraph) IsDescriptive(sub string) bool {
 	if sub == ContainmentSubsystem {
-		return false
+		return !c.Reserves()
 	}
 	if c.Descriptive != nil {
 		if d, ok := c.Descriptive[sub]; ok {

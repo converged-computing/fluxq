@@ -72,7 +72,7 @@ def memory_at_least(bucket: str, allowed: list[str]) -> list | None:
     order = list(allowed or [])
     if bucket not in order:
         return None
-    higher = order[order.index(bucket):]
+    higher = order[order.index(bucket) :]
     return section(higher)
 
 

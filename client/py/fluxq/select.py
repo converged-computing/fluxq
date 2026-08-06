@@ -41,14 +41,14 @@ def container_facts(variant: dict) -> dict:
     """
     platform = variant.get("platform") or {}
     facts = {"arch": variant.get("arch", "")}
-    for key in ("libc_flavor", "libc_version", "os_id", "os_version_id",
-                "os_codename"):
+    for key in ("libc_flavor", "libc_version", "os_id", "os_version_id", "os_codename"):
         if platform.get(key):
             facts[key] = platform[key]
     mpi = (variant.get("capability") or {}).get("mpi")
     if mpi:
         facts["mpi"] = mpi
     return {k: v for k, v in facts.items() if v}
+
 
 SELECT = """You turn each profiled application into ONE fluxq jobspec, choosing the
 best container and reconciling the manifest against the standard vocabulary.
