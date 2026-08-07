@@ -2,7 +2,7 @@
 
 > a fleet-level queue manager for descriptive dispatch
 
-![docs/img/fluxq.png](docs/img/fluxq.png)
+![docs/img/fluxq-small.png](docs/img/fluxq-small.png)
 
 A prototype of the `text prompt → select → transform → dispatch → monitor`
 pipeline, built with Fluxion. `fluxq` is the fleet-level analog of Flux's
@@ -254,6 +254,9 @@ out of it.
 - **Dispatch.** One driver per backend; emulated clusters are satisfy-only, Kubernetes applies any manifest generically, Flux dispatches through libflux.
 - **Reconcile.** When a job can't fit anywhere, optionally suggest a reshaped one that would.
 
+Here is the architecture:
+
+![docs/img/architecture.png](docs/img/architecture.png)
 
 ## Life of a Job
 
