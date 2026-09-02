@@ -2,6 +2,8 @@
 
 > a fleet-level queue manager for descriptive dispatch
 
+[![DOI](https://zenodo.org/badge/1297171006.svg)](https://doi.org/10.5281/zenodo.22239934)
+
 ![docs/img/fluxq-small.png](docs/img/fluxq-small.png)
 
 A prototype of the `text prompt → select → transform → dispatch → monitor`
